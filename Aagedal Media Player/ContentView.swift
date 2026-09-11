@@ -450,7 +450,10 @@ struct ContentView: View {
 
     /// Compare Mode keeps the full inspection bar: trim regions, review-note
     /// markers, comparison legend and timeline zoom all live here.
-    private var inspectionControls: some View {
+    ///
+    /// Not private so the native chrome check can render the bar as the
+    /// reference for the mode switch it is half of.
+    var inspectionControls: some View {
         ControlsView(
             controller: controller,
             compareSession: compareSession,
