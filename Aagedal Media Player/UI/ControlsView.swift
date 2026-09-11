@@ -126,7 +126,13 @@ struct ControlsView: View {
         .disabled(!isLoaded)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(.ultraThinMaterial)
+        .background {
+            // A dark scrim under the blur keeps the controls readable over
+            // bright picture, where plain material washes out.
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .overlay(Color.black.opacity(0.34))
+        }
         .overlay(
             GeometryReader { geo in
                 Color.clear

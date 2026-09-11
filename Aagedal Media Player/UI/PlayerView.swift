@@ -196,6 +196,8 @@ struct PlayerView: View {
             Spacer()
         }
         .padding(16)
+        // The traffic lights now float over the picture; keep clear of them.
+        .padding(.leading, 62)
     }
 
     private static let timecodeCharacters = Set("0123456789+-.:;")
