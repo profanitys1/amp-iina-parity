@@ -26,7 +26,6 @@ struct ContentView: View {
     @State private var isTimelineFocused = false
     @State private var isPlaybackControlsFocused = false
     @State private var showReviewNotes = false
-    @State private var showComparisonControls = false
     @State private var deferredComparisonAction = DeferredMainActorTask()
     @State private var showCompareModeCallout = false
     @State private var isToolbarControlFocused = false
@@ -80,7 +79,6 @@ struct ContentView: View {
             || isToolbarControlFocused
             || showLoupeControls
             || showReviewNotes
-            || showComparisonControls
             || showCompareModeCallout
     }
 
@@ -144,7 +142,7 @@ struct ContentView: View {
                         isEditingTimecode: $isEditingTimecode,
                         isTimelineFocused: $isTimelineFocused,
                         isOverlayControlFocused: isControlInteractionActive,
-                        isTextInputActive: showReviewNotes || showLoupeControls || showComparisonControls,
+                        isTextInputActive: showReviewNotes || showLoupeControls,
                         timecodeActivationTrigger: $timecodeActivationTrigger
                     )
                 } else {
@@ -346,15 +344,12 @@ struct ContentView: View {
         }
         .onChange(of: compareSession.secondaryController.mediaItem?.url) { _, _ in
             deferredComparisonAction.cancel()
-            showComparisonControls = false
         }
         .onChange(of: controller.mediaItem?.url) { _, _ in
             deferredComparisonAction.cancel()
-            showComparisonControls = false
         }
         .onChange(of: compareSession.isActive) { _, isActive in
             deferredComparisonAction.cancel()
-            showComparisonControls = false
             if !isActive {
                 showReviewNotes = false
             } else {
@@ -481,28 +476,6 @@ struct ContentView: View {
         .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
         .padding(.horizontal, 12)
         .padding(.bottom, 12)
-        // The comparison settings that used to live in the title bar are now
-        // reachable from the View menu; this keeps every one of them intact.
-        .popover(isPresented: $showComparisonControls, arrowEdge: .bottom) {
-            ScrollViewReader { scrollView in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Text("Comparison controls")
-                            .font(.headline)
-                        TransportSyncStatusView()
-                        comparisonSettings(compact: true)
-                        comparisonFileActions(compact: true)
-                    }
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .onPreferenceChange(PlayerToolbarFocusPreference.self) { focusID in
-                    if let focusID { scrollView.scrollTo(focusID) }
-                }
-            }
-            .frame(width: 300, height: 380)
-            .preferredColorScheme(.dark)
-        }
     }
 
     // MARK: - Scope Overlay
@@ -547,322 +520,6 @@ struct ContentView: View {
         PlayerTitleBar(title: controller.mediaItem?.url.lastPathComponent ?? "")
     }
 
-    @ViewBuilder
-    private func comparisonSettings(compact: Bool = false) -> some View {
-        let comparedChannels = compareSession.availableComparedAudioChannels(primary: controller)
-        let overlapStatus = compareSession.overlapStatus(
-            primaryDuration: controller.mediaItem?.durationSeconds ?? 0
-        )
-
-        Picker("Compare view", selection: $compareSession.viewMode) {
-            ForEach(CompareViewMode.allCases, id: \.self) { mode in
-                Text(mode.label).tag(mode)
-            }
-        }
-        .pickerStyle(.menu)
-        .playerToolbarFocus()
-        .frame(width: compact ? 260 : 150)
-        .help("Choose comparison view. Press B to toggle A/B.")
-
-        Menu {
-            Picker(
-                "Frame resolution",
-                selection: Binding(
-                    get: { compareSession.frameResolution },
-                    set: { compareSession.setFrameResolution($0, primary: controller) }
-                )
-            ) {
-                ForEach(CompareFrameResolution.allCases, id: \.self) { resolution in
-                    Text(resolution.label).tag(resolution)
-                }
-            }
-        } label: {
-            Label(
-                compareSession.frameResolution == .full ? "Full" : "½",
-                systemImage: "rectangle.on.rectangle"
-            )
-        }
-        .menuStyle(.borderlessButton)
-        .playerToolbarFocus()
-        .fixedSize()
-        .disabled(!compareSession.isSecondaryReady)
-        .help(
-            "Choose the live comparison render resolution. Reduced Frame can improve playback performance; source files and exports remain full resolution."
-        )
-        .accessibilityLabel("Comparison frame resolution")
-        .accessibilityValue(compareSession.frameResolution.label)
-
-        Picker(
-            "Audio source",
-            selection: Binding(
-                get: { compareSession.audioSource },
-                set: { compareSession.selectAudioSource($0, primary: controller) }
-            )
-        ) {
-            ForEach(CompareAudioSource.allCases, id: \.self) { source in
-                Text(source.label)
-                    .tag(source)
-                    .disabled(
-                        source == .secondary
-                            && !compareSession.isSecondaryReady
-                    )
-            }
-        }
-        .pickerStyle(.menu)
-        .playerToolbarFocus()
-        .frame(width: compact ? 260 : 100)
-        .help("Choose the only comparison source that is audible")
-        .accessibilityLabel("Comparison audio source")
-        .accessibilityValue(compareSession.audioSource.label)
-
-        Menu {
-            Button {
-                compareSession.selectComparedAudioChannel(nil, primary: controller)
-            } label: {
-                HStack {
-                    Text("All Channels")
-                    if compareSession.comparedAudioChannel == nil {
-                        Image(systemName: "checkmark")
-                    }
-                }
-            }
-
-            Divider()
-
-            ForEach(comparedChannels) { channel in
-                Button {
-                    compareSession.selectComparedAudioChannel(channel, primary: controller)
-                } label: {
-                    HStack {
-                        Text(channel.label)
-                        if compareSession.comparedAudioChannel?.id == channel.id {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                }
-            }
-        } label: {
-            Label(
-                compareSession.comparedAudioChannel?.label ?? "All Channels",
-                systemImage: "speaker.wave.2"
-            )
-        }
-        .menuStyle(.borderlessButton)
-        .playerToolbarFocus()
-        .fixedSize()
-        .disabled(comparedChannels.isEmpty)
-        .help(
-            comparedChannels.isEmpty
-                ? "Matching channel monitoring is unavailable for these audio layouts"
-                : "Monitor all channels or isolate the matching channel in A and B"
-        )
-        .accessibilityLabel("Compared audio channel")
-        .accessibilityValue(compareSession.comparedAudioChannel?.label ?? "All channels")
-
-        CompareAudioLayoutIndicator(
-            primaryController: controller,
-            secondaryController: compareSession.secondaryController
-        )
-        .playerToolbarFocus()
-
-        Menu {
-            Picker("Safe Area", selection: $compareSession.safeAreaGuide) {
-                ForEach(CompareSafeAreaGuide.allCases, id: \.self) { guide in
-                    Text(guide.label).tag(guide)
-                }
-            }
-
-            Picker("Aspect Ratio", selection: $compareSession.aspectRatioGuide) {
-                ForEach(CompareAspectRatioGuide.allCases, id: \.self) { guide in
-                    Text(guide.label).tag(guide)
-                }
-            }
-        } label: {
-            HStack {
-                if compact { Text("Comparison guides") }
-                Image(
-                    systemName: compareSession.safeAreaGuide != .none
-                        || compareSession.aspectRatioGuide != .none
-                        ? "viewfinder.circle.fill"
-                        : "viewfinder.circle"
-                )
-                .foregroundColor(.white.opacity(0.9))
-            }
-        }
-        .menuStyle(.borderlessButton)
-        .playerToolbarFocus()
-        .fixedSize()
-        .help("Configure safe-area and aspect-ratio guides shared by both sources")
-        .accessibilityLabel("Comparison guides")
-        .accessibilityValue(comparisonGuideAccessibilityValue)
-
-        if compareSession.viewMode.isWipe {
-            if compact { Text("Wipe position").font(.caption) }
-            Slider(
-                value: Binding(
-                    get: { compareSession.wipePosition },
-                    set: { compareSession.setWipePosition($0) }
-                ),
-                in: 0...1
-            )
-            .controlSize(.small)
-            .frame(width: 110)
-            .help("Wipe position. Drag the divider or press [ and ].")
-            .playerToolbarFocus()
-            .accessibilityLabel("Wipe position")
-            .accessibilityValue("\(Int(compareSession.wipePosition * 100)) percent")
-        } else if compareSession.viewMode == .overlay {
-            if compact { Text("Overlay blend (A → B)").font(.caption) }
-            Slider(
-                value: Binding(
-                    get: { compareSession.overlayBlend },
-                    set: { compareSession.setOverlayBlend($0) }
-                ),
-                in: 0...1
-            )
-                .controlSize(.small)
-                .frame(width: 110)
-                .help("Overlay blend: A at the left, B at the right")
-                .playerToolbarFocus()
-                .accessibilityLabel("Overlay blend")
-                .accessibilityValue("\(Int(compareSession.overlayBlend * 100)) percent source B")
-        } else if compareSession.viewMode == .difference {
-            if compact { Text("Difference gain").font(.caption) }
-            Slider(
-                value: Binding(
-                    get: { compareSession.differenceGain },
-                    set: { compareSession.setDifferenceGain($0) }
-                ),
-                in: CompareSessionController.minimumDifferenceGain...CompareSessionController.maximumDifferenceGain,
-                step: 0.5
-            )
-                .controlSize(.small)
-                .frame(width: 110)
-                .help("Amplify the post-display RGB difference. This is not an objective image-quality metric.")
-                .playerToolbarFocus()
-                .accessibilityLabel("Difference gain")
-                .accessibilityValue("\(compareSession.differenceGain.formatted()) times")
-
-            Text("\(compareSession.differenceGain.formatted())× display-space")
-                .font(.caption)
-                .monospacedDigit()
-                .foregroundStyle(.white.opacity(0.72))
-                .help("Difference is computed from post-display RGB, not normalized source pixels")
-        }
-
-        if showScopeOverlay {
-            Picker("Scope source", selection: $compareSession.scopeSource) {
-                ForEach(CompareScopeSource.allCases, id: \.self) { source in
-                    Text(source.label).tag(source)
-                }
-            }
-            .pickerStyle(.menu)
-            .playerToolbarFocus()
-            .frame(width: compact ? 260 : 130)
-            .help("Choose whether scopes inspect source A, source B, or their display-space difference")
-
-            if compareSession.scopeSource == .difference,
-               compareSession.viewMode != .difference {
-                if compact { Text("Scope difference gain").font(.caption) }
-                Slider(
-                    value: Binding(
-                        get: { compareSession.differenceGain },
-                        set: { compareSession.setDifferenceGain($0) }
-                    ),
-                    in: CompareSessionController.minimumDifferenceGain...CompareSessionController.maximumDifferenceGain,
-                    step: 0.5
-                )
-                .controlSize(.small)
-                .frame(width: 65)
-                .help("Amplify the display-space scope difference. This is not an objective image-quality metric.")
-                .playerToolbarFocus()
-                .accessibilityLabel("Scope difference gain")
-                .accessibilityValue("\(compareSession.differenceGain.formatted()) times")
-
-                Text("\(compareSession.differenceGain.formatted())× Δ")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.white.opacity(0.72))
-            }
-        }
-
-        if let mapping = compareSession.mapping {
-            HStack {
-                CompareAlignmentControl(session: compareSession, primary: controller)
-                    .playerToolbarFocus()
-                if compact { Text("Adjust alignment").font(.caption) }
-            }
-            Text("\(mapping.mode.label) · \(overlapStatus.label)")
-                .font(.caption)
-                .foregroundStyle(
-                    overlapStatus == .none
-                        ? Color.yellow
-                        : Color.white.opacity(0.72)
-                )
-                .help(
-                    overlapStatus == .none
-                        ? "The aligned timelines do not overlap. Source B stays parked on its nearest boundary during playback."
-                        : "How the source timelines align. The timeline shows the exact B offset and shared playable interval."
-                )
-                .accessibilityLabel("\(mapping.mode.label), \(overlapStatus.label)")
-        }
-
-        CompareMismatchIndicator(
-            primaryController: controller,
-            secondaryController: compareSession.secondaryController,
-            isActive: compareSession.isActive
-        )
-        .playerToolbarFocus()
-    }
-
-    @ViewBuilder
-    private func comparisonFileActions(compact: Bool = false) -> some View {
-        Button(action: {
-            if showComparisonControls {
-                showComparisonControls = false
-                deferredComparisonAction.schedule {
-                    compareSession.captureComparisonStill(primary: controller)
-                }
-            } else {
-                compareSession.captureComparisonStill(primary: controller)
-            }
-        }) {
-            HStack {
-                Image(systemName: "square.and.arrow.down")
-                    .font(.system(size: 15))
-                if compact { Text("Export comparison still") }
-            }
-            .foregroundColor(.white.opacity(0.9))
-        }
-        .buttonStyle(.plain)
-        .playerToolbarFocus()
-        .help("Export an annotated comparison still (Command-S)")
-        .accessibilityLabel("Export comparison still")
-        .disabled(!compareSession.isSecondaryReady)
-
-        Button(action: openCompareFilePanel) {
-            HStack {
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 15))
-                if compact { Text("Replace comparison file") }
-            }
-            .foregroundColor(.white.opacity(0.9))
-        }
-        .buttonStyle(.plain)
-        .playerToolbarFocus()
-        .help("Replace comparison file")
-        .accessibilityLabel("Replace comparison file")
-    }
-
-    private var comparisonGuideAccessibilityValue: String {
-        let safeArea = compareSession.safeAreaGuide == .none
-            ? nil
-            : compareSession.safeAreaGuide.label
-        let aspectRatio = compareSession.aspectRatioGuide == .none
-            ? nil
-            : compareSession.aspectRatioGuide.label
-        let labels = [safeArea, aspectRatio].compactMap { $0 }
-        return labels.isEmpty ? "Off" : labels.joined(separator: ", ")
-    }
 
     private var compareModeCallout: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1000,11 +657,6 @@ struct ContentView: View {
     }
 
     private func openCompareFilePanel() {
-        if showComparisonControls {
-            showComparisonControls = false
-            deferredComparisonAction.schedule { openCompareFilePanel() }
-            return
-        }
         guard controller.mediaItem != nil else { return }
         didShowCompareModeCallout = true
         showCompareModeCallout = false
