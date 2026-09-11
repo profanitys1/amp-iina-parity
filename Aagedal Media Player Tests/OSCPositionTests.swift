@@ -23,7 +23,8 @@ final class OSCPositionTests: XCTestCase {
             .origin(in: video, cardSize: card)
         XCTAssertEqual(centred.x, 270, accuracy: 0.001)
         // 25pt bottom margin: 600 - 67 - 25
-        XCTAssertEqual(centred.y, 508, accuracy: 0.001)
+        // No bottom margin (IINA 1.5.0-beta1 sits flush): 600 - 67 - 0
+        XCTAssertEqual(centred.y, 533, accuracy: 0.001)
 
         let hardLeft = OSCPosition(horizontal: 0, vertical: 0)
             .origin(in: video, cardSize: card)

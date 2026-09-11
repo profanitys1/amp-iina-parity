@@ -8,8 +8,15 @@ import Foundation
 /// Where the floating control card sits inside the video rect, stored as
 /// fractions so the card keeps its relative place when the window resizes.
 nonisolated struct OSCPosition: Equatable, Sendable {
-    /// Gap between the card and the bottom of the video, matching IINA.
-    static let bottomMargin: CGFloat = 25
+    /// Gap between the card and the bottom of the video.
+    ///
+    /// IINA 1.5.0-beta1 (the build this fork is matched against) draws its
+    /// floating control bar flush with the bottom edge: measured from a
+    /// difference pair of window captures at 2x, the bar occupies the last
+    /// 80 pt of the content with a 0 pt gap. The 25 pt value this constant
+    /// previously held came from `docs/IINA_OSC_REFERENCE.md`, which was
+    /// measured from the older commit `a320321`.
+    static let bottomMargin: CGFloat = 0
 
     /// Drag distance within which the card locks to horizontal centre.
     static let snapThreshold: Double = 5
