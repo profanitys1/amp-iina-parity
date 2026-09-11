@@ -164,6 +164,10 @@ struct FloatingOSCView: View {
 
     private var toolbarGroup: some View {
         HStack(spacing: 0) {
+            // The transport-sync badge used to live in the title bar; it renders
+            // nothing unless multi-window sync is active, so the card geometry is
+            // unchanged in the ordinary case.
+            TransportSyncStatusView()
             iconButton("gearshape", help: "Settings", action: onShowSettings)
             iconButton("list.bullet.rectangle", help: "Playlist", action: onShowPlaylist)
             subtitleMenu

@@ -425,11 +425,6 @@ struct ContentView: View {
 
     private var overlayControls: some View {
         VStack(spacing: 0) {
-            if isMediaLoaded {
-                topToolbar
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-
             Spacer(minLength: 0)
 
             if compareSession.isActive || compareSession.isLoading {
@@ -513,13 +508,6 @@ struct ContentView: View {
         .frame(height: targetHeight)
         .clipped()
     }
-
-    // MARK: - Top Toolbar
-
-    private var topToolbar: some View {
-        PlayerTitleBar(title: controller.mediaItem?.url.lastPathComponent ?? "")
-    }
-
 
     private var compareModeCallout: some View {
         VStack(alignment: .leading, spacing: 12) {
