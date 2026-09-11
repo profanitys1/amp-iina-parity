@@ -23,7 +23,7 @@ final class PlayerOverlayController: ObservableObject {
     /// Hardware key code used by AppKit for Tab, including Shift-Tab.
     private static let tabKeyCode: UInt16 = 48
 
-    init(hideDelay: Duration = .seconds(3)) {
+    init(hideDelay: Duration = .seconds(2.5)) {
         self.hideDelay = hideDelay
     }
 

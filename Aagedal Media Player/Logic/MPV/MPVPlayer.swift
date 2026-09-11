@@ -210,7 +210,10 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         checkError(mpv_set_option_string(mpv, "input-default-bindings", "no"), context: "input-default-bindings")
         checkError(mpv_set_option_string(mpv, "input-vo-keyboard", "no"), context: "input-vo-keyboard")
         checkError(mpv_set_option_string(mpv, "load-scripts", "no"), context: "load-scripts")
-        checkError(mpv_set_option_string(mpv, "sid", "no"), context: "sid")
+        // Inspection work wants a clean picture; ordinary viewing wants the
+        // subtitles that ship with the file.
+        let autoSubtitles = UserDefaults.standard.value(for: AppSettings.autoSelectSubtitles)
+        checkError(mpv_set_option_string(mpv, "sid", autoSubtitles ? "auto" : "no"), context: "sid")
         if isAudioTrackDisabled {
             checkError(mpv_set_option_string(mpv, "aid", "no"), context: "aid")
         }
@@ -939,6 +942,12 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             command("change-list", args: ["glsl-shaders", "append", path])
         }
         setFlag("deband", profile.enablesDeband)
+    }
+
+    /// Attaches an external subtitle file to the current media and selects it.
+    func addSubtitle(url: URL) {
+        guard mpv != nil else { return }
+        command("sub-add", args: [url.path, "select"])
     }
 
     private func commandString(_ cmd: String) {

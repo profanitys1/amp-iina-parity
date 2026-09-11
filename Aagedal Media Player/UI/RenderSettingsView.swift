@@ -15,6 +15,8 @@ struct RenderSettingsView: View {
     private var renderProfileRaw = AppSettings.renderProfile.defaultValue
     @AppStorage(AppSettings.shaderDirectory.key)
     private var shaderDirectory = AppSettings.shaderDirectory.defaultValue
+    @AppStorage(AppSettings.autoSelectSubtitles.key)
+    private var autoSelectSubtitles = AppSettings.autoSelectSubtitles.defaultValue
 
     private var profile: RenderProfile {
         RenderProfile(rawValue: renderProfileRaw) ?? .off
@@ -74,6 +76,13 @@ struct RenderSettingsView: View {
                 }
 
                 Text("Defaults to ~/.config/mpv/shaders so an existing mpv shader library works unchanged.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Subtitles") {
+                Toggle("Select a Subtitle Track Automatically", isOn: $autoSelectSubtitles)
+                Text("Applies to files opened from now on. Turn this off for inspection work that needs a clean picture.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

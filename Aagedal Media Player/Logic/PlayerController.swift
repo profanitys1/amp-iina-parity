@@ -1446,6 +1446,10 @@ final class PlayerController: ObservableObject {
         _ = trackSelection.selectSubtitleTrack(at: position, mpvPlayer: mpvPlayer)
     }
 
+    func addSubtitle(url: URL) {
+        mpvPlayer?.addSubtitle(url: url)
+    }
+
     // MARK: - Chapter Selection
 
     func refreshChapterOptions(playerItem: AVPlayerItem?) {
