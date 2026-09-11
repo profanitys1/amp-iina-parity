@@ -334,6 +334,20 @@ struct RecentDocumentsMenu: View {
 // MARK: - App Delegate
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    /// True when this process is hosting an XCTest bundle.
+    ///
+    /// Unit tests run in-process, so the app *is* the test runner. Parallel
+    /// runners are several instances of the same bundle, and a quit request
+    /// (⌘Q, the Dock, or a Quit AppleEvent addressed by bundle ID) can reach an
+    /// instance that is still executing tests. Honoring it ends that runner
+    /// mid-suite, and XCTest reports the in-flight test as "the test runner
+    /// exited with code 0 before finishing running tests". Runners exit on
+    /// their own once their tests finish, so ignore quit requests here.
+    private var isHostingUnitTests: Bool {
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || NSClassFromString("XCTestCase") != nil
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppSettings.registerDefaults()
         UpdateChecker.shared.checkIfNeeded()
@@ -344,7 +358,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         WindowManager.shared.open(urls)
     }
 
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // A stray quit must not kill a runner that is still working.
+        isHostingUnitTests ? .terminateCancel : .terminateNow
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        // Closing the host window must not end the suite either.
+        !isHostingUnitTests
     }
 }
