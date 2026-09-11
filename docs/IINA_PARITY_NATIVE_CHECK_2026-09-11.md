@@ -19,10 +19,15 @@ and is explicitly not executed.
   applied the final-verification-wave findings — a fade-timings bullet and the
   speed-chord not-implemented group in `CHANGELOG.md`, the eight-failing-tests
   note in `README.md` and in this file's Limits, and a temporary-directory
-  default for the chrome test's evidence output. The tip is therefore
-  **29 commits** over the local snapshot; no product source changed after
-  `b065b2b` except that one test file, and the suite was re-run green at the
-  follow-up tip (`$EVID/final-f3-suite-tip.xcresult`).
+  default for the chrome test's evidence output. Commit counts in this document
+  are self-referential — every documentation commit adds one — so they are stated
+  for the audited tip rather than as a moving total: **30 commits** over the local
+  snapshot at `dcf6379`; run `git rev-list --count upstream/main..HEAD` for the
+  current figure. No product source changed after `b065b2b` except that one test
+  file, and the suite was re-run green at the follow-up tip:
+  `$EVID/final-f3-suite-tip.xcresult` — **570 passed / 0 failed / 1 skipped,
+  `TEST SUCCEEDED`** (110.8 s), re-confirmed from the finished bundle after the
+  independent verifier observed it still in flight.
 - Build and test route: scheme `Aagedal Media Player`, destination
   `platform=macOS`, `CODE_SIGNING_ALLOWED=NO`, invoked through `xcodebuild`.
   No `project.pbxproj` change, no scheme change, no version bump:
@@ -334,7 +339,7 @@ Landing procedure — **documented, not executed**. It publishes to
 ```sh
 git fetch upstream                 # refresh first: see the remote note below
 git switch main
-git merge --ff-only iina-parity    # clean against the local main f30f8cf: 27 ahead, 0 behind
+git merge --ff-only iina-parity    # clean against the local main f30f8cf: 30 ahead, 0 behind at the audited tip dcf6379
 git push upstream main
 ```
 
