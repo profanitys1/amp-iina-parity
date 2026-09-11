@@ -24,8 +24,8 @@ final class PlayerWindowCoordinator: ObservableObject {
     private weak var closedWindow: NSWindow?
     private var droppedURLResults: DroppedURLResults?
     private var droppedURLLoadProgresses: [Progress] = []
-    private var siblingMediaURLs: [URL] = []
-    private var siblingMediaIndex: Int?
+    @Published private(set) var siblingMediaURLs: [URL] = []
+    @Published private(set) var siblingMediaIndex: Int?
     private let logger = Logger(
         subsystem: "com.aagedal.MediaPlayer",
         category: "PlayerWindowCoordinator"
@@ -204,7 +204,7 @@ final class PlayerWindowCoordinator: ObservableObject {
         adjacentMediaURL(offset: 1)
     }
 
-    func handleDrop(_ providers: [NSItemProvider]) -> Bool {
+    func handleDrop(_ providers: [NSItemProvider], controller: PlayerController) -> Bool {
         guard !providers.isEmpty else { return false }
         cancelDroppedURLLoads()
 
@@ -218,7 +218,18 @@ final class PlayerWindowCoordinator: ObservableObject {
                     guard let self, self.droppedURLResults === results else { return }
                     self.droppedURLResults = nil
                     self.droppedURLLoadProgresses = []
-                    WindowManager.shared.open(completedURLs)
+
+                    let subtitles = completedURLs.filter { Self.isSubtitleFile($0) }
+                    let media = completedURLs.filter { !Self.isSubtitleFile($0) }
+
+                    // Subtitles attach to what is already playing; only media opens windows.
+                    for subtitle in subtitles {
+                        controller.addSubtitle(url: subtitle)
+                    }
+
+                    if !media.isEmpty {
+                        WindowManager.shared.open(media)
+                    }
                 }
             }
             droppedURLLoadProgresses.append(progress)
@@ -392,6 +403,13 @@ final class PlayerWindowCoordinator: ObservableObject {
         await AsyncDeadline.value(within: timeout) {
             try? await MetadataService.shared.metadata(for: url)
         }
+    }
+
+    /// mpv reads these directly; they are never opened as media.
+    nonisolated static let subtitleExtensions: Set<String> = ["srt", "ass", "ssa", "vtt", "sub", "idx"]
+
+    nonisolated static func isSubtitleFile(_ url: URL) -> Bool {
+        subtitleExtensions.contains(url.pathExtension.lowercased())
     }
 
     nonisolated static let supportedMediaTypes: [UTType] = [
