@@ -200,6 +200,10 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
 
         checkError(mpv_set_option_string(mpv, "target-colorspace-hint", "yes"), context: "target-colorspace-hint")
         checkError(mpv_set_option_string(mpv, "keep-open", "yes"), context: "keep-open")
+        // The app draws its own timecode; mpv's OSD would sit over the picture
+        // in the window's top-left corner saying the same thing in a different
+        // time format.
+        checkError(mpv_set_option_string(mpv, "osd-level", "0"), context: "osd-level")
         checkError(mpv_set_option_string(mpv, "deinterlace", "auto"), context: "deinterlace")
         checkError(mpv_set_option_string(mpv, "screenshot-high-bit-depth", "yes"), context: "screenshot-high-bit-depth")
 
