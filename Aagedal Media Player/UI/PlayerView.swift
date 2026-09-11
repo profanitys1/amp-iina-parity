@@ -200,10 +200,12 @@ struct PlayerView: View {
         .padding(.leading, 62)
     }
 
-    private static let timecodeCharacters = Set("0123456789+-.:;")
+    private static let timecodeCharacters = Set("0123456789+-:;")
 
+    /// Not private: the native key check drives the monitor's own entry point
+    /// so the ordinary-playback routes are asserted against controller state.
     @MainActor
-    private func handleKeyEvent(_ characters: String, _ modifiers: NSEvent.ModifierFlags, _ specialKey: NSEvent.SpecialKey?) -> Bool {
+    func handleKeyEvent(_ characters: String, _ modifiers: NSEvent.ModifierFlags, _ specialKey: NSEvent.SpecialKey?) -> Bool {
         guard acceptsKeyboardInput else { return false }
 
         // Don't intercept keys when editing timecode
@@ -227,6 +229,29 @@ struct PlayerView: View {
             return false
         }
 
+        // Character keys, decided once and before the comparison branch: the
+        // rate, frame-step, pause and fullscreen keys belong to ordinary
+        // playback too, and only the wipe takes `[`/`]` away while it shows.
+        if let action = PlayerKeyMap.characterAction(
+            characters,
+            modifiers: modifiers,
+            isWipeMode: compareSession?.isActive == true && compareSession?.viewMode.isWipe == true
+        ) {
+            switch action {
+            case .stepRate(let forward):
+                NotificationCenter.default.post(.stepRate(forward: forward))
+            case .stepFrames(let frameCount):
+                NotificationCenter.default.post(.seekByFrames(frameCount))
+            case .togglePlayback:
+                NotificationCenter.default.post(.togglePlayback)
+            case .toggleFullscreen:
+                NotificationCenter.default.post(.toggleFullscreen)
+            case .nudgeWipe(let delta):
+                compareSession?.moveWipe(by: delta)
+            }
+            return true
+        }
+
         let lower = characters.lowercased()
 
         if let compareSession, compareSession.isActive {
@@ -234,19 +259,6 @@ struct PlayerView: View {
             if lower == "b", modifiers.intersection(commandModifiers).isEmpty {
                 compareSession.togglePrimarySecondary()
                 return true
-            }
-
-            if compareSession.viewMode.isWipe,
-               modifiers.intersection(commandModifiers).isEmpty {
-                let increment = modifiers.contains(.shift) ? 0.1 : 0.02
-                if lower == "[" {
-                    compareSession.moveWipe(by: -increment)
-                    return true
-                }
-                if lower == "]" {
-                    compareSession.moveWipe(by: increment)
-                    return true
-                }
             }
         }
 

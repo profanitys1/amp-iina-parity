@@ -405,6 +405,15 @@ private struct PlaybackHandlers: ViewModifier {
             }
             .onReceive(NotificationCenter.default.appCommandPublisher) { notification in
                 guard let command = notification.appCommand,
+                      case .stepRate(let forward) = command,
+                      WindowManager.shared.shouldHandlePlaybackCommand(window: nsWindow) else { return }
+                // Compare Mode has no rate step of its own: stepping A alone
+                // would desync the pair, so `[`/`]` only nudge the wipe there.
+                guard !compareSession.isActive else { return }
+                controller.stepRate(forward: forward)
+            }
+            .onReceive(NotificationCenter.default.appCommandPublisher) { notification in
+                guard let command = notification.appCommand,
                       case .slowForward = command else { return }
                 guard WindowManager.shared.shouldHandlePlaybackCommand(window: nsWindow) else { return }
                 if compareSession.isActive {

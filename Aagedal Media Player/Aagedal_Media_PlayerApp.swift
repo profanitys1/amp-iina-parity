@@ -224,6 +224,20 @@ struct Aagedal_Media_PlayerApp: App {
                 .keyboardShortcut("l", modifiers: [])
                 .disabled(!mediaLoaded)
 
+                // No key equivalents on purpose: `[`/`]` reach the key monitor
+                // only when the text field, timeline and overlay-control guards
+                // allow it, and a plain-key menu shortcut would fire exactly in
+                // the cases the monitor deliberately yields.
+                Button("Speed Down") {
+                    NotificationCenter.default.post(.stepRate(forward: false))
+                }
+                .disabled(!mediaLoaded)
+
+                Button("Speed Up") {
+                    NotificationCenter.default.post(.stepRate(forward: true))
+                }
+                .disabled(!mediaLoaded)
+
                 Divider()
 
                 Button("Slow Forward") {

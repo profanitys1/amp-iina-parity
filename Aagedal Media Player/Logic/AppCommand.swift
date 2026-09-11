@@ -24,6 +24,8 @@ enum AppCommand {
     case adjustVolume(by: Double)
     case reverse
     case fastForward
+    /// Steps the playback rate by the app's own additive step.
+    case stepRate(forward: Bool)
     case slowForward
     case slowReverse
     case seekByFrames(Int)
