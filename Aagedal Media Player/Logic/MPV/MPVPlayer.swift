@@ -196,6 +196,8 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         checkError(mpv_set_option_string(mpv, "video-reversal-buffer", "4GiB"), context: "video-reversal-buffer")
         checkError(mpv_set_option_string(mpv, "audio-reversal-buffer", "128MiB"), context: "audio-reversal-buffer")
 
+        applyRenderProfileOption()
+
         checkError(mpv_set_option_string(mpv, "target-colorspace-hint", "yes"), context: "target-colorspace-hint")
         checkError(mpv_set_option_string(mpv, "keep-open", "yes"), context: "keep-open")
         checkError(mpv_set_option_string(mpv, "deinterlace", "auto"), context: "deinterlace")
@@ -888,6 +890,52 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     // MARK: - MPV Commands & Properties
+
+    // MARK: - Render Profile
+
+    /// The shader stack currently applied to the render path.
+    private(set) var renderProfile: RenderProfile = .off
+
+    private var shaderLibrary: ShaderLibrary {
+        ShaderLibrary(directoryPath: UserDefaults.standard.value(for: AppSettings.shaderDirectory))
+    }
+
+    /// Reads the stored profile and sets it as an mpv option. Only valid
+    /// before `mpv_initialize` — use `setRenderProfile` afterwards.
+    private func applyRenderProfileOption() {
+        let stored = UserDefaults.standard.value(for: AppSettings.renderProfile)
+        let profile = RenderProfile(rawValue: stored) ?? .off
+        renderProfile = profile
+
+        let library = shaderLibrary
+        let missing = library.missingShaderNames(for: profile)
+        if !missing.isEmpty {
+            logger.warning("Shader files missing from \(library.directory.path, privacy: .public): \(missing.joined(separator: ", "), privacy: .public)")
+        }
+
+        let value = library.shaderOptionValue(for: profile)
+        if !value.isEmpty {
+            checkError(mpv_set_option_string(mpv, "glsl-shaders", value), context: "glsl-shaders")
+        }
+        checkError(mpv_set_option_string(mpv, "deband", profile.enablesDeband ? "yes" : "no"), context: "deband")
+    }
+
+    /// Switches the shader stack on a running player.
+    ///
+    /// The list is cleared and rebuilt one path at a time so a directory
+    /// containing mpv's list separator cannot corrupt the stack here.
+    func setRenderProfile(_ profile: RenderProfile) {
+        renderProfile = profile
+        UserDefaults.standard.set(profile.rawValue, for: AppSettings.renderProfile)
+
+        guard mpv != nil else { return }
+
+        command("change-list", args: ["glsl-shaders", "clr", ""])
+        for path in shaderLibrary.shaderPaths(for: profile) {
+            command("change-list", args: ["glsl-shaders", "append", path])
+        }
+        setFlag("deband", profile.enablesDeband)
+    }
 
     private func commandString(_ cmd: String) {
         guard let mpvCtx = mpv else { return }

@@ -134,6 +134,13 @@ private struct FileAndWindowHandlers: ViewModifier {
             }
             .onReceive(NotificationCenter.default.appCommandPublisher) { notification in
                 guard let command = notification.appCommand,
+                      case .setRenderProfile(let profile) = command else { return }
+                // Rendering is a global preference: every open window follows it,
+                // so this handler deliberately skips the active-window guard.
+                controller.mpvPlayer?.setRenderProfile(profile)
+            }
+            .onReceive(NotificationCenter.default.appCommandPublisher) { notification in
+                guard let command = notification.appCommand,
                       case .toggleFullscreen = command else { return }
                 guard WindowManager.shared.isActiveWindow(nsWindow) else { return }
                 controller.toggleFullscreen()

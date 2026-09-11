@@ -125,6 +125,9 @@ struct SettingsView: View {
             ExportSettingsView()
                 .tabItem { Label("Export", systemImage: "square.and.arrow.up") }
 
+            RenderSettingsView()
+                .tabItem { Label("Rendering", systemImage: "sparkles") }
+
             ScopeSettingsView()
                 .tabItem { Label("Scopes", systemImage: "waveform") }
 

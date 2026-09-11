@@ -31,6 +31,10 @@ nonisolated enum AppSettings {
     static let playbackVolume = AppSetting(key: "playbackVolume", defaultValue: 100.0)
     static let playbackMuted = AppSetting(key: "playbackMuted", defaultValue: false)
 
+    // Rendering
+    static let renderProfile = AppSetting(key: "renderProfile", defaultValue: RenderProfile.chroma.rawValue)
+    static let shaderDirectory = AppSetting(key: "shaderDirectory", defaultValue: "")
+
     // Screenshots and trim exports
     static let screenshotLocationMode = AppSetting(key: "screenshotLocationMode", defaultValue: "custom")
     static let screenshotFormat = AppSetting(key: "screenshotFormat", defaultValue: "jxl")
@@ -82,6 +86,8 @@ nonisolated enum AppSettings {
             centerWindowAfterResize.key: centerWindowAfterResize.defaultValue,
             playbackVolume.key: playbackVolume.defaultValue,
             playbackMuted.key: playbackMuted.defaultValue,
+            renderProfile.key: renderProfile.defaultValue,
+            shaderDirectory.key: shaderDirectory.defaultValue,
             screenshotLocationMode.key: screenshotLocationMode.defaultValue,
             screenshotFormat.key: screenshotFormat.defaultValue,
             trimLocationMode.key: trimLocationMode.defaultValue,
