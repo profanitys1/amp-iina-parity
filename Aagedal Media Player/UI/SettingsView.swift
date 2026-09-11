@@ -765,23 +765,26 @@ private struct KeyboardShortcutsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 shortcutSection("Playback", shortcuts: [
-                    ("Space / K", "Play / Pause"),
+                    ("Space / P", "Play / Pause"),
+                    ("K", "Pause"),
                     ("J", "Reverse (press again to increase speed)"),
                     ("L", "Fast Forward (press again to increase speed)"),
+                    ("M", "Mute / Unmute"),
+                    ("F / \u{2303}\u{2318}F", "Toggle fullscreen"),
+                    ("[ / ]", "Playback rate down / up by 0.5 (outside Compare wipe mode)"),
                 ])
 
                 shortcutSection("Navigation", shortcuts: [
-                    ("\u{2190}", "Back 1 frame"),
-                    ("\u{2192}", "Forward 1 frame"),
-                    ("\u{2191}", "Back 10 frames"),
-                    ("\u{2193}", "Forward 10 frames"),
-                    ("\u{21E7}\u{2190}", "Back 10 seconds"),
-                    ("\u{21E7}\u{2192}", "Forward 10 seconds"),
-                    ("\u{2318}\u{2191}", "Jump to start"),
-                    ("\u{2318}\u{2193}", "Jump to end"),
-                    ("\u{2318}[", "Previous file in folder"),
-                    ("\u{2318}]", "Next file in folder"),
-                    ("\u{2325}\u{2190}\u{2192}\u{2191}\u{2193}", "Same as above, current window only"),
+                    ("\u{2190} / \u{2192}", "Seek back / forward 5 seconds"),
+                    ("\u{21E7}\u{2190} / \u{21E7}\u{2192}", "Seek back / forward 10 seconds"),
+                    ("\u{2325}\u{2190} / \u{2325}\u{2192}", "Step back / forward one frame"),
+                    (". / ,", "Step one frame forward / back"),
+                    ("\u{2191} / \u{2193}", "Volume up / down 5"),
+                    ("\u{2325}\u{2191} / \u{2325}\u{2193}", "Volume up / down 1"),
+                    ("\u{21E7}\u{2191} / \u{21E7}\u{2193}", "Jump back / forward 10 frames"),
+                    ("\u{2318}\u{2191} / \u{2318}\u{2193}", "Jump to start / end"),
+                    ("\u{2318}[ / \u{2318}]", "Previous / next file in folder"),
+                    ("\u{2318}\u{2190} / \u{2318}\u{2192}", "Previous / next file in folder"),
                     ("\u{2325}Drag", "Precision scrub (\(Int(precisionScrubFactor))x slower)"),
                 ])
 
@@ -798,8 +801,8 @@ private struct KeyboardShortcutsView: View {
 
                 shortcutSection("Compare Mode", shortcuts: [
                     ("B", "Toggle source A / B"),
-                    ("[ / ]", "Move wipe 2%"),
-                    ("\u{21E7}[ / ]", "Move wipe 10%"),
+                    ("[ / ]", "Move wipe 2% (while the wipe is showing)"),
+                    ("\u{21E7}[ / ]", "Move wipe 10% (while the wipe is showing)"),
                 ])
 
                 shortcutSection("General", shortcuts: [
@@ -807,10 +810,15 @@ private struct KeyboardShortcutsView: View {
                     ("\u{21E7}\u{2318}S", "Align windows to current timecode once"),
                     ("\u{2318}W", "Close window"),
                     ("\u{2318}S", "Screenshot"),
-                    ("\u{2318}F", "Toggle fullscreen"),
                     ("T", "Cycle timecode display"),
                     ("\u{2318}I", "Toggle inspector"),
                     ("\u{2318}O", "Open file"),
+                    ("\u{21E7}\u{2318}O", "Open subtitle file"),
+                    ("\u{21E7}\u{2318}D", "Open comparison file"),
+                    ("\u{21E7}\u{2318}L", "Inspection loupe"),
+                    ("\u{21E7}\u{2318}N", "Comparison review notes"),
+                    ("\u{21E7}\u{2318}W", "Toggle video scopes"),
+                    ("\u{21E7}\u{2318}A", "Audio waveform"),
                     ("\u{21E7}\u{2318}R", "Reload player"),
                     ("\u{2318},", "Settings"),
                 ])

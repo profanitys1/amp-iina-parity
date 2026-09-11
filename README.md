@@ -52,11 +52,15 @@ scripts/generate-test-fixtures.sh
 xcodebuild test -project "Aagedal Media Player.xcodeproj" -scheme "Aagedal Media Player" -destination "platform=macOS"
 ```
 
-The generator requires a full ffmpeg installation with libx264/libx265. Set
-`FFMPEG=/path/to/ffmpeg` to select one explicitly. If fixtures are absent,
-the generated-media tests are skipped; all pure unit tests continue to run.
-External-reference and disk-full integration checks require their separate
-harnesses.
+The generator requires a full ffmpeg installation with libx264, libx265 and
+alac. Set `FFMPEG=/path/to/ffmpeg` to select one explicitly. Without the
+fixture tree **37 tests skip** (25 compare live-backend tests, 10
+generated-media fixture tests, the timeline thumbnail loader and the
+comparison still exporter); a 38th test,
+`CompareReviewDiskFullTests.testRealVolumeExhaustionPreservesSidecarAndAllowsRetry`,
+skips for a different reason and only runs through
+`scripts/test-compare-review-disk-full.sh`, never in the ordinary suite. All
+pure unit tests continue to run.
 
 Verify review-save recovery on a real full filesystem with an isolated 32 MiB
 HFS+ or 128 MiB APFS disk image:
@@ -250,31 +254,38 @@ Inspect resolution, frame rate, codec, color space, chroma subsampling, and audi
 
 | Shortcut | Action |
 | :--- | :--- |
-| Space | Play / Pause |
-| J | Reverse playback |
+| Space / P | Play / pause |
 | K | Pause |
+| J | Reverse playback |
 | L | Fast forward |
 | Option + J | Slow reverse |
 | Option + L | Slow forward |
-| F | Toggle fullscreen |
+| F or Control + Command + F | Toggle fullscreen |
 | M | Mute / unmute |
-| Control + Up Arrow | Increase volume |
-| Control + Down Arrow | Decrease volume |
+| Up Arrow / Down Arrow | Volume up / down 5 |
+| Option + Up Arrow / Down Arrow | Volume up / down 1 |
+| Control + Up Arrow / Down Arrow | Volume up / down 5 (menu item) |
+| [ / ] | Playback rate down / up by 0.5 (outside Compare wipe mode) |
+
+The rate steps by 0.5 and clamps between 0.25x and 8x; there is no reset
+shortcut. Inside Compare Mode's wipe the brackets belong to the wipe instead:
+`[`/`]` move it 2%, Shift with them 10%.
 
 ### Navigation
 
 | Shortcut | Action |
 | :--- | :--- |
-| Left Arrow | Step back 1 frame |
-| Right Arrow | Step forward 1 frame |
-| Up Arrow | Step back 10 frames |
-| Down Arrow | Step forward 10 frames |
-| Shift + Left Arrow | Seek backward 10 seconds |
-| Shift + Right Arrow | Seek forward 10 seconds |
-| Cmd + Up Arrow | Seek to start |
-| Cmd + Down Arrow | Seek to end |
-| Cmd + [ | Open previous media file in folder |
-| Cmd + ] | Open next media file in folder |
+| Left Arrow / Right Arrow | Seek back / forward 5 seconds |
+| Shift + Left Arrow / Right Arrow | Seek back / forward 10 seconds |
+| Option + Left Arrow / Right Arrow | Step back / forward one frame |
+| Period / Comma | Step one frame forward / back |
+| Shift + Up Arrow / Down Arrow | Jump back / forward 10 frames |
+| Command + Up Arrow / Down Arrow | Seek to start / end |
+| Cmd + [ or Cmd + Left Arrow | Open previous media file in folder |
+| Cmd + ] or Cmd + Right Arrow | Open next media file in folder |
+
+Option keeps its arrow handling inside the current window; every other arrow
+route is synchronized across windows.
 
 ### Trim
 
@@ -289,12 +300,20 @@ Inspect resolution, frame rate, codec, color space, chroma subsampling, and audi
 | Option + X | Clear all trim points |
 | Cmd + E | Export trim |
 
+### Compare Mode
+
+| Shortcut | Action |
+| :--- | :--- |
+| B | Toggle source A / B |
+| [ / ] | Move wipe 2% (while the wipe is showing) |
+| Shift + [ / ] | Move wipe 10% (while the wipe is showing) |
+
 ### Timecode
 
 | Shortcut | Action |
 | :--- | :--- |
 | T | Cycle timecode display mode |
-| 0–9, +, -, ., :, ; | Activate timecode input |
+| 0–9, +, -, :, ; | Activate timecode input |
 | Cmd + Shift + C | Copy timecode |
 | Cmd + Shift + V | Paste timecode |
 
@@ -303,10 +322,16 @@ Inspect resolution, frame rate, codec, color space, chroma subsampling, and audi
 | Shortcut | Action |
 | :--- | :--- |
 | Cmd + O | Open file |
+| Cmd + Shift + O | Open subtitle file |
 | Cmd + N | New window |
 | Cmd + W | Close window |
 | Cmd + S | Save screenshot, or export an annotated still in Compare Mode |
 | Cmd + I | Toggle inspector |
 | Cmd + Shift + W | Toggle video scopes |
+| Cmd + Shift + P | Toggle parade |
+| Cmd + Shift + A | Audio waveform |
+| Cmd + Shift + D | Open comparison file |
+| Cmd + Shift + L | Inspection loupe |
+| Cmd + Shift + N | Comparison review notes |
 | Cmd + Shift + S | Sync timecode across windows |
 | Cmd + Shift + R | Reload player |
