@@ -39,6 +39,11 @@ enum AppCommand {
     case toggleScopeParade
     case toggleAudioWaveform
     case setRenderProfile(RenderProfile)
+    case openComparisonFile
+    case toggleInspectionLoupe
+    case toggleReviewNotes
+    case toggleComparisonControls
+    case openSubtitleFile
 
     enum PlaybackEdge {
         case start

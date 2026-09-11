@@ -6,6 +6,7 @@
 
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 // MARK: - Notification Handlers (split out to help Swift type-checker)
 
@@ -27,6 +28,11 @@ struct NotificationHandlers: ViewModifier {
     let openFile: (URL) -> Void
     let openPreviousFile: () -> Void
     let openNextFile: () -> Void
+    let openCompareFilePanel: () -> Void
+    let toggleLoupeControls: () -> Void
+    let toggleReviewNotes: () -> Void
+    let toggleComparisonControls: () -> Void
+    let addSubtitle: (URL) -> Void
 
     func body(content: Content) -> some View {
         content
@@ -41,7 +47,12 @@ struct NotificationHandlers: ViewModifier {
                 showAudioWaveformOverlay: $showAudioWaveformOverlay,
                 audioWaveformGenerator: audioWaveformGenerator,
                 openFilePanel: openFilePanel, openFile: openFile,
-                openPreviousFile: openPreviousFile, openNextFile: openNextFile
+                openPreviousFile: openPreviousFile, openNextFile: openNextFile,
+                openCompareFilePanel: openCompareFilePanel,
+                toggleLoupeControls: toggleLoupeControls,
+                toggleReviewNotes: toggleReviewNotes,
+                toggleComparisonControls: toggleComparisonControls,
+                addSubtitle: addSubtitle
             ))
             .modifier(PlaybackHandlers(
                 controller: controller,
@@ -75,6 +86,11 @@ private struct FileAndWindowHandlers: ViewModifier {
     let openFile: (URL) -> Void
     let openPreviousFile: () -> Void
     let openNextFile: () -> Void
+    let openCompareFilePanel: () -> Void
+    let toggleLoupeControls: () -> Void
+    let toggleReviewNotes: () -> Void
+    let toggleComparisonControls: () -> Void
+    let addSubtitle: (URL) -> Void
     @AppStorage(AppSettings.scopeDisplayMode.key)
     private var scopeDisplayMode = AppSettings.scopeDisplayMode.defaultValue
     @AppStorage(AppSettings.audioWaveformDisplayMode.key)
@@ -138,6 +154,47 @@ private struct FileAndWindowHandlers: ViewModifier {
                 // Rendering is a global preference: every open window follows it,
                 // so this handler deliberately skips the active-window guard.
                 controller.mpvPlayer?.setRenderProfile(profile)
+            }
+            .onReceive(NotificationCenter.default.appCommandPublisher) { notification in
+                guard let command = notification.appCommand,
+                      case .openComparisonFile = command else { return }
+                guard WindowManager.shared.isActiveWindow(nsWindow) else { return }
+                openCompareFilePanel()
+            }
+            .onReceive(NotificationCenter.default.appCommandPublisher) { notification in
+                guard let command = notification.appCommand,
+                      case .toggleInspectionLoupe = command else { return }
+                guard WindowManager.shared.isActiveWindow(nsWindow) else { return }
+                toggleLoupeControls()
+            }
+            .onReceive(NotificationCenter.default.appCommandPublisher) { notification in
+                guard let command = notification.appCommand,
+                      case .toggleReviewNotes = command else { return }
+                guard WindowManager.shared.isActiveWindow(nsWindow) else { return }
+                toggleReviewNotes()
+            }
+            .onReceive(NotificationCenter.default.appCommandPublisher) { notification in
+                guard let command = notification.appCommand,
+                      case .toggleComparisonControls = command else { return }
+                guard WindowManager.shared.isActiveWindow(nsWindow) else { return }
+                toggleComparisonControls()
+            }
+            .onReceive(NotificationCenter.default.appCommandPublisher) { notification in
+                guard let command = notification.appCommand,
+                      case .openSubtitleFile = command else { return }
+                guard WindowManager.shared.isActiveWindow(nsWindow), controller.mediaItem != nil else { return }
+
+                let panel = NSOpenPanel()
+                panel.canChooseFiles = true
+                panel.canChooseDirectories = false
+                panel.allowsMultipleSelection = false
+                panel.allowedContentTypes = PlayerWindowCoordinator.subtitleExtensions
+                    .sorted()
+                    .compactMap { UTType(filenameExtension: $0) }
+                panel.prompt = "Open"
+
+                guard panel.runModal() == .OK, let url = panel.url else { return }
+                addSubtitle(url)
             }
             .onReceive(NotificationCenter.default.appCommandPublisher) { notification in
                 guard let command = notification.appCommand,

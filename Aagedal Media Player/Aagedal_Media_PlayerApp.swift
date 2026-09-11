@@ -90,6 +90,12 @@ struct Aagedal_Media_PlayerApp: App {
                 }
                 .keyboardShortcut("o")
 
+                Button("Open Subtitle File\u{2026}") {
+                    NotificationCenter.default.post(.openSubtitleFile)
+                }
+                .keyboardShortcut("o", modifiers: [.command, .shift])
+                .disabled(!mediaLoaded)
+
                 Button("Close Window") {
                     NSApp.keyWindow?.close()
                 }
@@ -158,6 +164,31 @@ struct Aagedal_Media_PlayerApp: App {
                 }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
                 .disabled(!mediaLoaded)
+
+                Divider()
+
+                Button("Open Comparison File\u{2026}") {
+                    NotificationCenter.default.post(.openComparisonFile)
+                }
+                .keyboardShortcut("d", modifiers: [.command, .shift])
+                .disabled(!mediaLoaded)
+
+                Button("Comparison Controls") {
+                    NotificationCenter.default.post(.toggleComparisonControls)
+                }
+                .disabled(isCompareModeActive != true)
+
+                Button("Inspection Loupe") {
+                    NotificationCenter.default.post(.toggleInspectionLoupe)
+                }
+                .keyboardShortcut("l", modifiers: [.command, .shift])
+                .disabled(!mediaLoaded)
+
+                Button("Comparison Review Notes") {
+                    NotificationCenter.default.post(.toggleReviewNotes)
+                }
+                .keyboardShortcut("n", modifiers: [.command, .shift])
+                .disabled(isCompareModeActive != true)
             }
             CommandMenu("Playback") {
                 Button("Play / Pause") {

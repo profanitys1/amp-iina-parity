@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var timecodeMode: TimecodeDisplayMode = .relative
     @State private var isDropTargeted = false
     @State private var showInspector = false
+    @State private var inspectorTab: InspectorTab = .playlist
     @StateObject private var loupe = InspectionLoupeState()
     @StateObject private var loupePrimaryCapture = LoupeFrameCapture()
     @StateObject private var loupeSecondaryCapture = LoupeFrameCapture()
@@ -47,6 +48,19 @@ struct ContentView: View {
     private var audioWaveformBackground = AppSettings.audioWaveformBackground.defaultValue
 
     private let rightEdgeWidth: CGFloat = 60
+
+    private enum InspectorTab: String, CaseIterable, Identifiable {
+        case playlist
+        case metadata
+
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .playlist: "Playlist"
+            case .metadata: "Metadata"
+            }
+        }
+    }
 
     init() {}
 
@@ -101,7 +115,12 @@ struct ContentView: View {
                 openFilePanel: openFilePanel,
                 openFile: openFile,
                 openPreviousFile: openPreviousFile,
-                openNextFile: openNextFile
+                openNextFile: openNextFile,
+                openCompareFilePanel: openCompareFilePanel,
+                toggleLoupeControls: { showLoupeControls.toggle() },
+                toggleReviewNotes: { showReviewNotes.toggle() },
+                toggleComparisonControls: { showComparisonControls.toggle() },
+                addSubtitle: { controller.addSubtitle(url: $0) }
             ))
     }
 
@@ -177,7 +196,7 @@ struct ContentView: View {
             // Layer 2: export/screenshot feedback (fades with overlay controls)
             MediaOperationFeedbackOverlay(controller: controller)
             .opacity(isMediaLoaded ? (showOverlay ? 1 : 0) : 1)
-            .animation(.easeInOut(duration: 0.3), value: showOverlay)
+            .animation(.easeInOut(duration: 0.25), value: showOverlay)
 
             // Layer 3: update banner
             if updateChecker.updateAvailable, !updateBannerDismissed {
@@ -201,7 +220,7 @@ struct ContentView: View {
                         audioWaveformOverlay(containerHeight: geo.size.height)
                     }
                     .padding(.bottom, showOverlay ? 80 : 0)
-                    .animation(.easeInOut(duration: 0.3), value: showOverlay)
+                    .animation(.easeInOut(duration: 0.25), value: showOverlay)
                 }
                 .allowsHitTesting(true)
             }
@@ -215,7 +234,7 @@ struct ContentView: View {
                         scopeOverlay(containerHeight: geo.size.height)
                     }
                     .padding(.bottom, (showOverlay ? 80 : 0) + audioWaveformHeight)
-                    .animation(.easeInOut(duration: 0.3), value: showOverlay)
+                    .animation(.easeInOut(duration: 0.25), value: showOverlay)
                 }
                 .allowsHitTesting(false)
             }
@@ -260,12 +279,41 @@ struct ContentView: View {
             )
         }
         .inspector(isPresented: $showInspector) {
-            if let item = controller.mediaItem {
-                MetadataInspectorView(item: item, useMPV: controller.useMPV, trimIn: controller.trimIn, trimOut: controller.trimOut, isPresented: $showInspector)
+            VStack(spacing: 0) {
+                Picker("", selection: $inspectorTab) {
+                    ForEach(InspectorTab.allCases) { tab in
+                        Text(tab.title).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .padding(8)
+
+                Divider()
+
+                switch inspectorTab {
+                case .playlist:
+                    PlaylistSidebarView(
+                        urls: windowCoordinator.siblingMediaURLs,
+                        currentIndex: windowCoordinator.siblingMediaIndex,
+                        onSelect: { openFile(url: $0) }
+                    )
+                case .metadata:
+                    if let item = controller.mediaItem {
+                        MetadataInspectorView(
+                            item: item,
+                            useMPV: controller.useMPV,
+                            trimIn: controller.trimIn,
+                            trimOut: controller.trimOut,
+                            isPresented: $showInspector
+                        )
+                    }
+                }
             }
+            .inspectorColumnWidth(min: 280, ideal: 360, max: 480)
         }
         .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
-            windowCoordinator.handleDrop(providers)
+            windowCoordinator.handleDrop(providers, controller: controller)
         }
         .alert(
             "Compare Mode",
@@ -386,38 +434,76 @@ struct ContentView: View {
             if isMediaLoaded {
                 topToolbar
                     .transition(.move(edge: .top).combined(with: .opacity))
-                    // Clear the traffic lights, which now sit over the picture.
-                    .padding(.leading, 78)
             }
 
             Spacer(minLength: 0)
 
-            ControlsView(
-                controller: controller,
-                compareSession: compareSession,
-                item: controller.mediaItem,
-                timecodeMode: $timecodeMode,
-                isEditingTimecode: $isEditingTimecode,
-                isTimelineFocused: $isTimelineFocused,
-                isControlsFocused: $isPlaybackControlsFocused,
-                timecodeActivationTrigger: $timecodeActivationTrigger
-            )
-            .transition(.move(edge: .bottom).combined(with: .opacity))
-            .frame(minWidth: 20)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
-            )
-            .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
-            .padding(.horizontal, 12)
-            .padding(.bottom, 12)
+            if compareSession.isActive || compareSession.isLoading {
+                inspectionControls
+            } else {
+                FloatingOSCView(
+                    controller: controller,
+                    onShowPlaylist: { showInspector = true },
+                    onShowSettings: {
+                        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                    }
+                )
+                .transition(.opacity)
+                .frame(height: 120)
+            }
         }
         .onHover { hovering in
             overlayController.setControlsHovered(hovering)
         }
         .opacity(isMediaLoaded ? (showOverlay ? 1 : 0) : 1)
-        .animation(.easeInOut(duration: 0.3), value: showOverlay)
+        .animation(.easeInOut(duration: 0.25), value: showOverlay)
+    }
+
+    /// Compare Mode keeps the full inspection bar: trim regions, review-note
+    /// markers, comparison legend and timeline zoom all live here.
+    private var inspectionControls: some View {
+        ControlsView(
+            controller: controller,
+            compareSession: compareSession,
+            item: controller.mediaItem,
+            timecodeMode: $timecodeMode,
+            isEditingTimecode: $isEditingTimecode,
+            isTimelineFocused: $isTimelineFocused,
+            isControlsFocused: $isPlaybackControlsFocused,
+            timecodeActivationTrigger: $timecodeActivationTrigger
+        )
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+        .frame(minWidth: 20)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
+        )
+        .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 12)
+        // The comparison settings that used to live in the title bar are now
+        // reachable from the View menu; this keeps every one of them intact.
+        .popover(isPresented: $showComparisonControls, arrowEdge: .bottom) {
+            ScrollViewReader { scrollView in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Comparison controls")
+                            .font(.headline)
+                        TransportSyncStatusView()
+                        comparisonSettings(compact: true)
+                        comparisonFileActions(compact: true)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .onPreferenceChange(PlayerToolbarFocusPreference.self) { focusID in
+                    if let focusID { scrollView.scrollTo(focusID) }
+                }
+            }
+            .frame(width: 300, height: 380)
+            .preferredColorScheme(.dark)
+        }
     }
 
     // MARK: - Scope Overlay
@@ -459,158 +545,7 @@ struct ContentView: View {
     // MARK: - Top Toolbar
 
     private var topToolbar: some View {
-        HStack(spacing: 10) {
-            if !compareSession.isActive {
-                TransportSyncStatusView()
-                Spacer(minLength: 0)
-            }
-
-            if compareSession.isLoading {
-                ProgressView()
-                    .controlSize(.small)
-                    .help("Loading comparison file")
-
-                Button("Cancel") {
-                    compareSession.stop()
-                }
-                .buttonStyle(.plain)
-                .playerToolbarFocus()
-                .help("Cancel loading the comparison file")
-                .accessibilityLabel("Cancel loading comparison file")
-            } else if compareSession.isActive {
-                // Reserve the persistent actions first. Only the settings group
-                // collapses, so review popovers keep one stable presentation anchor.
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 10) {
-                        TransportSyncStatusView()
-                        comparisonSettings()
-                        comparisonFileActions()
-                    }
-                    .fixedSize(horizontal: true, vertical: false)
-
-                    Button {
-                        showComparisonControls.toggle()
-                    } label: {
-                        Image(systemName: "slider.horizontal.3")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.white.opacity(0.9))
-                    }
-                    .buttonStyle(.plain)
-                    .playerToolbarFocus()
-                    .help("Show comparison controls")
-                    .accessibilityLabel("Comparison controls")
-                    .popover(isPresented: $showComparisonControls, arrowEdge: .bottom) {
-                        ScrollViewReader { scrollView in
-                            ScrollView {
-                                VStack(alignment: .leading, spacing: 16) {
-                                    Text("Comparison controls")
-                                        .font(.headline)
-                                    TransportSyncStatusView()
-                                    comparisonSettings(compact: true)
-                                    comparisonFileActions(compact: true)
-                                }
-                                .padding(16)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .onPreferenceChange(PlayerToolbarFocusPreference.self) { focusID in
-                                if let focusID { scrollView.scrollTo(focusID) }
-                            }
-                        }
-                        .frame(width: 300, height: 380)
-                        .preferredColorScheme(.dark)
-                    }
-                }
-                Spacer(minLength: 0)
-
-                Button(action: { showReviewNotes.toggle() }) {
-                    ZStack(alignment: .topTrailing) {
-                        Image(systemName: "text.bubble")
-                            .font(.system(size: 15))
-                        if !compareSession.reviewNotes.isEmpty {
-                            Text("\(compareSession.reviewNotes.count)")
-                                .font(.system(size: 8, weight: .bold, design: .rounded))
-                                .foregroundStyle(.black)
-                                .padding(2)
-                                .background(.orange, in: Circle())
-                                .offset(x: 7, y: -7)
-                        }
-                    }
-                    .foregroundColor(.white.opacity(0.9))
-                }
-                .buttonStyle(.plain)
-                .playerToolbarFocus()
-                .help("Add or edit frame-accurate comparison notes")
-                .accessibilityLabel("Comparison review notes")
-                .accessibilityValue("\(compareSession.reviewNotes.count) notes")
-                .popover(isPresented: $showReviewNotes, arrowEdge: .bottom) {
-                    CompareReviewView(
-                        primaryController: controller,
-                        compareSession: compareSession,
-                        timecodeMode: timecodeMode
-                    )
-                }
-
-                Button(action: {
-                    showReviewNotes = false
-                    showComparisonControls = false
-                    compareSession.stop()
-                }) {
-                    Image(systemName: "xmark.circle")
-                        .font(.system(size: 16))
-                        .foregroundColor(.white.opacity(0.9))
-                }
-                .buttonStyle(.plain)
-                .playerToolbarFocus()
-                .help("Exit Compare Mode")
-                .accessibilityLabel("Exit Compare Mode")
-            } else {
-                Button(action: openCompareFilePanel) {
-                    Image(systemName: "rectangle.split.2x1")
-                        .font(.system(size: 16))
-                        .foregroundColor(.white.opacity(0.9))
-                }
-                .buttonStyle(.plain)
-                .playerToolbarFocus()
-                .help("Add comparison file")
-                .accessibilityLabel("Add comparison file")
-                .disabled(controller.mediaItem == nil || compareSession.isLoading)
-                .popover(isPresented: $showCompareModeCallout, arrowEdge: .top) {
-                    compareModeCallout
-                }
-            }
-
-            InspectionLoupeControl(state: loupe, isPresented: $showLoupeControls)
-                .playerToolbarFocus()
-                .disabled(!isMediaLoaded || controller.mediaItem?.presentationKind == .audioOnly)
-
-            Button(action: { showInspector.toggle() }) {
-                Image(systemName: "info.circle")
-                    .font(.system(size: 16))
-                    .foregroundColor(.white.opacity(0.9))
-            }
-            .buttonStyle(.plain)
-            .playerToolbarFocus()
-            .help("Show metadata inspector")
-            .accessibilityLabel(showInspector ? "Hide metadata inspector" : "Show metadata inspector")
-            .accessibilityValue(showInspector ? "Shown" : "Hidden")
-            .accessibilityAddTraits(showInspector ? .isSelected : [])
-            .disabled(controller.mediaItem == nil)
-        }
-        .onPreferenceChange(PlayerToolbarFocusPreference.self) {
-            isToolbarControlFocused = $0 != nil
-        }
-        .onDisappear { isToolbarControlFocused = false }
-        .padding(.leading, 16)
-        .padding(.trailing, rightEdgeWidth + 16)
-        .padding(.top, 28)
-        .padding(.bottom, 24)
-        .background(
-            LinearGradient(
-                colors: [Color.black.opacity(0.6), Color.clear],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        PlayerTitleBar(title: controller.mediaItem?.url.lastPathComponent ?? "")
     }
 
     @ViewBuilder
@@ -1019,7 +954,7 @@ struct ContentView: View {
                         }
                         .padding(6)
                         .opacity(showOverlay && !overlayController.isRightEdgeHovered ? 1 : 0)
-                        .animation(.easeInOut(duration: 0.3), value: showOverlay)
+                        .animation(.easeInOut(duration: 0.25), value: showOverlay)
                         .animation(.easeInOut(duration: 0.3), value: overlayController.isRightEdgeHovered)
                         .allowsHitTesting(false)
                 }
