@@ -198,13 +198,13 @@ struct Aagedal_Media_PlayerApp: App {
                 .keyboardShortcut("m", modifiers: [])
                 .disabled(!mediaLoaded)
 
-                Button("Increase Volume") {
+                Button("Increase Volume (\u{2191})") {
                     NotificationCenter.default.post(.adjustVolume(by: 5))
                 }
                 .keyboardShortcut(.upArrow, modifiers: [.control])
                 .disabled(!mediaLoaded)
 
-                Button("Decrease Volume") {
+                Button("Decrease Volume (\u{2193})") {
                     NotificationCenter.default.post(.adjustVolume(by: -5))
                 }
                 .keyboardShortcut(.downArrow, modifiers: [.control])
@@ -257,7 +257,7 @@ struct Aagedal_Media_PlayerApp: App {
                 Button("Toggle Fullscreen") {
                     NotificationCenter.default.post(.toggleFullscreen)
                 }
-                .keyboardShortcut("f")
+                .keyboardShortcut("f", modifiers: [.control, .command])
                 .disabled(!mediaLoaded)
 
                 Divider()

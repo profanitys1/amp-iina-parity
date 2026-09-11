@@ -329,66 +329,46 @@ struct PlayerView: View {
             return true
         }
 
-        // Arrow keys — routed through notifications for multi-window sync,
-        // Option+Arrow bypasses sync and only affects the current window.
-        if let specialKey {
-            let optionHeld = modifiers.contains(.option)
-            if modifiers.contains(.control) {
-                switch specialKey {
-                case .upArrow:
-                    adjustVolume(by: 5)
-                    return true
-                case .downArrow:
-                    adjustVolume(by: -5)
-                    return true
-                default:
-                    break
+        // Arrow keys — the table decides both the action and whether it stays
+        // in this window or is broadcast for multi-window sync.
+        if let specialKey,
+           let action = PlayerKeyMap.arrowAction(key: specialKey, modifiers: modifiers) {
+            let route = PlayerKeyMap.arrowRoute(key: specialKey, modifiers: modifiers) ?? .local
+            switch action {
+            case .seekBy(let seconds):
+                if route == .broadcast {
+                    NotificationCenter.default.post(.seekBySeconds(seconds))
+                } else {
+                    seek(by: seconds)
                 }
+            case .stepFrames(let frameCount):
+                if route == .broadcast {
+                    NotificationCenter.default.post(.seekByFrames(frameCount))
+                } else {
+                    seekByFrames(frameCount)
+                }
+            case .seekToStart:
+                if route == .broadcast {
+                    NotificationCenter.default.post(.seekToEdge(.start))
+                } else {
+                    seek(to: 0)
+                }
+            case .seekToEnd:
+                if route == .broadcast {
+                    NotificationCenter.default.post(.seekToEdge(.end))
+                } else {
+                    seek(to: max(0, controller.mediaItem?.durationSeconds ?? 0))
+                }
+            case .adjustVolume(let delta):
+                // Local on purpose: IINA's volume keys are per-window, so they
+                // must not go through the broadcast volume command.
+                adjustVolume(by: Double(delta))
+            case .previousFile:
+                NotificationCenter.default.post(.openPreviousFile)
+            case .nextFile:
+                NotificationCenter.default.post(.openNextFile)
             }
-            switch specialKey {
-            case .leftArrow:
-                if modifiers.contains(.shift) {
-                    if optionHeld { seek(by: -10) }
-                    else { NotificationCenter.default.post(.seekBySeconds(-10)) }
-                } else {
-                    // IINA parity: a plain arrow skips 5 seconds. Option keeps
-                    // AMP's single-frame precision step.
-                    if optionHeld { seekByFrames(-1) }
-                    else { NotificationCenter.default.post(.seekBySeconds(-5)) }
-                }
-                return true
-            case .rightArrow:
-                if modifiers.contains(.shift) {
-                    if optionHeld { seek(by: 10) }
-                    else { NotificationCenter.default.post(.seekBySeconds(10)) }
-                } else {
-                    // IINA parity: a plain arrow skips 5 seconds. Option keeps
-                    // AMP's single-frame precision step.
-                    if optionHeld { seekByFrames(1) }
-                    else { NotificationCenter.default.post(.seekBySeconds(5)) }
-                }
-                return true
-            case .upArrow:
-                if modifiers.contains(.command) {
-                    if optionHeld { seek(to: 0) }
-                    else { NotificationCenter.default.post(.seekToEdge(.start)) }
-                } else {
-                    if optionHeld { seekByFrames(-10) }
-                    else { NotificationCenter.default.post(.seekByFrames(-10)) }
-                }
-                return true
-            case .downArrow:
-                if modifiers.contains(.command) {
-                    if optionHeld { seek(to: max(0, controller.mediaItem?.durationSeconds ?? 0)) }
-                    else { NotificationCenter.default.post(.seekToEdge(.end)) }
-                } else {
-                    if optionHeld { seekByFrames(10) }
-                    else { NotificationCenter.default.post(.seekByFrames(10)) }
-                }
-                return true
-            default:
-                break
-            }
+            return true
         }
 
         // Activate timecode input on numeric/timecode characters (no modifiers)
