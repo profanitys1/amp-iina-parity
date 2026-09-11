@@ -339,8 +339,10 @@ struct PlayerView: View {
                     if optionHeld { seek(by: -10) }
                     else { NotificationCenter.default.post(.seekBySeconds(-10)) }
                 } else {
+                    // IINA parity: a plain arrow skips 5 seconds. Option keeps
+                    // AMP's single-frame precision step.
                     if optionHeld { seekByFrames(-1) }
-                    else { NotificationCenter.default.post(.seekByFrames(-1)) }
+                    else { NotificationCenter.default.post(.seekBySeconds(-5)) }
                 }
                 return true
             case .rightArrow:
@@ -348,8 +350,10 @@ struct PlayerView: View {
                     if optionHeld { seek(by: 10) }
                     else { NotificationCenter.default.post(.seekBySeconds(10)) }
                 } else {
+                    // IINA parity: a plain arrow skips 5 seconds. Option keeps
+                    // AMP's single-frame precision step.
                     if optionHeld { seekByFrames(1) }
-                    else { NotificationCenter.default.post(.seekByFrames(1)) }
+                    else { NotificationCenter.default.post(.seekBySeconds(5)) }
                 }
                 return true
             case .upArrow:
