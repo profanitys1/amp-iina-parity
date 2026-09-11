@@ -35,6 +35,19 @@ nonisolated enum AppSettings {
     static let renderProfile = AppSetting(key: "renderProfile", defaultValue: RenderProfile.chroma.rawValue)
     static let shaderDirectory = AppSetting(key: "shaderDirectory", defaultValue: "")
 
+    // Control bar
+    static let controlBarPositionHorizontal = AppSetting(
+        key: "controlBarPositionHorizontal",
+        defaultValue: OSCPosition.default.horizontal
+    )
+    static let controlBarPositionVertical = AppSetting(
+        key: "controlBarPositionVertical",
+        defaultValue: OSCPosition.default.vertical
+    )
+
+    // Subtitles
+    static let autoSelectSubtitles = AppSetting(key: "autoSelectSubtitles", defaultValue: true)
+
     // Screenshots and trim exports
     static let screenshotLocationMode = AppSetting(key: "screenshotLocationMode", defaultValue: "custom")
     static let screenshotFormat = AppSetting(key: "screenshotFormat", defaultValue: "jxl")
@@ -88,6 +101,9 @@ nonisolated enum AppSettings {
             playbackMuted.key: playbackMuted.defaultValue,
             renderProfile.key: renderProfile.defaultValue,
             shaderDirectory.key: shaderDirectory.defaultValue,
+            controlBarPositionHorizontal.key: controlBarPositionHorizontal.defaultValue,
+            controlBarPositionVertical.key: controlBarPositionVertical.defaultValue,
+            autoSelectSubtitles.key: autoSelectSubtitles.defaultValue,
             screenshotLocationMode.key: screenshotLocationMode.defaultValue,
             screenshotFormat.key: screenshotFormat.defaultValue,
             trimLocationMode.key: trimLocationMode.defaultValue,

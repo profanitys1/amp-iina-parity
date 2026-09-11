@@ -70,6 +70,16 @@ final class AppSettingsTests: XCTestCase {
         XCTAssertTrue(defaults.value(for: AppSettings.playbackMuted))
     }
 
+    func testControlBarPositionDefaultsToCentredBottom() {
+        let defaults = UserDefaults(suiteName: "OSCPositionDefaults-\(UUID().uuidString)")!
+        AppSettings.registerDefaults(in: defaults)
+
+        XCTAssertEqual(defaults.value(for: AppSettings.controlBarPositionHorizontal),
+                       OSCPosition.default.horizontal)
+        XCTAssertEqual(defaults.value(for: AppSettings.controlBarPositionVertical),
+                       OSCPosition.default.vertical)
+    }
+
     func testStorageKeysRemainCompatibleWithExistingVersions() {
         XCTAssertEqual(AppSettings.screenshotLocationMode.key, "screenshotLocationMode")
         XCTAssertEqual(AppSettings.trimExportFormat.key, "trimExportFormat")
