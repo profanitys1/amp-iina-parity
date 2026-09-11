@@ -62,6 +62,11 @@ skips for a different reason and only runs through
 `scripts/test-compare-review-disk-full.sh`, never in the ordinary suite. All
 pure unit tests continue to run.
 
+Eight further tests exercise the new player chrome and key layer against the
+generated tree. They **fail** rather than skip when it is absent, so run
+`scripts/generate-test-fixtures.sh` before the suite; a missing tree is reported
+as a failure, never as a silent pass.
+
 Verify review-save recovery on a real full filesystem with an isolated 32 MiB
 HFS+ or 128 MiB APFS disk image:
 

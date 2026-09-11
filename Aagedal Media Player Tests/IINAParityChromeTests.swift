@@ -34,9 +34,11 @@ final class IINAParityChromeTests: XCTestCase {
     func testComposedChromeWritesItsRenderingEvidence() throws {
         // The evidence root of this change set; an override keeps the helper
         // usable from a different checkout.
+        // Evidence goes to a temporary directory unless the caller supplies the
+        // evidence root, so running the suite never writes into another user's home.
         let configured = ProcessInfo.processInfo.environment["CHROME_EVIDENCE_DIR"]
         let directory = URL(fileURLWithPath: configured.flatMap { $0.isEmpty ? nil : $0 }
-            ?? "/Users/filip/.omo/evidence/amp-iina-parity-continuation/chrome")
+            ?? NSTemporaryDirectory()).appending(path: "amp-chrome-evidence", directoryHint: .isDirectory)
 
         let written = try writeChromeEvidence(to: directory)
         XCTAssertEqual(written.count, 2)

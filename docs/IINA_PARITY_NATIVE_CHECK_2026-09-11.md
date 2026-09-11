@@ -187,6 +187,11 @@ and is explicitly not executed.
 - **Fixtures are gitignored.** A fresh clone re-skips the **37 fixture-gated
   tests** until `scripts/generate-test-fixtures.sh` is run; the fixture-only
   checkpoint and the tip counts above depend on that generated tree existing.
+  The eight tests added by this change set (chrome geometry, chrome behaviour and
+  key wiring) instead **fail** when the tree is absent, because a new `XCTSkip`
+  was forbidden by the plan's Must-NOT. On a machine without the generated tree
+  the suite therefore reports those eight failures, not skips; running the
+  generator first is the documented remedy.
 - **The disk-image test is opt-in and is never covered by the ordinary suite.**
   Its single skip in every full run is deliberate
   (`$EVID/task-3-optin-check.xcresult`); its real coverage is the two harness

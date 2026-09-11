@@ -56,6 +56,7 @@ All notable changes to Aagedal Media Player.
 - A playlist sidebar listing the folder's other media beside the current file, plus automatic subtitle-track selection on open and drop-to-attach for external subtitle files.
 - Keyboard parity with the installed IINA default preset for the playback surface: Up/Down adjust volume (±5, with Option for ±1), Option+Left/Right and `.`/`,` step frames, `p` pauses, `f` and `⌃⌘F` toggle fullscreen, and `⌘←`/`⌘→` move between files in the folder.
 - `[`/`]` step the playback rate outside Compare wipe mode, where they continue to nudge the wipe.
+- IINA's chrome fade timings: the overlay fades over 0.25 s and the controls hide after 2.5 s without pointer movement.
 
 ### Changed
 - Add explicit Retry Save for failed review-note writes, flush current text drafts before retrying, and prevent reload from discarding unsaved changes.
@@ -131,7 +132,7 @@ All notable changes to Aagedal Media Player.
 - The picture carries no filename strip: the window title text is hidden so nothing overlays the video, and the file name is discoverable in the Window menu and the playlist sidebar.
 - Compare Mode has had no exit control since `711fd80`: leave it by opening another file or closing the window.
 - Deliberate departures from IINA's defaults: `⇧←`/`⇧→` seek ±10 s instead of IINA's subtitle seek, the rate step is AMP's additive 0.5 (clamped 0.25…8.0) with no reset binding, `⇧↑`/`⇧↓` keep an AMP-specific ±10-frame jump, and `q` stays unbound in favour of `⌘Q`.
-- Not implemented from IINA's default preset: chapter navigation (`⇧⌘>`/`⇧⌘<`); audio and subtitle delay (`⇧(`/`⇧)`, `Z`/`X`/`C`); subtitle scale, position and visibility (`G`/`F`, `r`/`R`/`t`, `v`, `⌥v`); loop (`⌘l`/`⌘L`); stop (`⌘.`); window scale (`⌘0`/`⌘1`/`⌘2`); editions (`E`); track cycling (`⌃⌘v`/`⌃⌘s`/`⌃⌘a`); always-on-top (`⌃⌘t`); progress display (`o`/`P`); page seeks (`⇧PGUP`/`⇧PGDN`); the `ESC`/`ENTER` fullscreen pair; mute on `⌘/`; and the media/window keys `PLAY`, `PAUSE`, `PLAYPAUSE`, `PLAYONLY`, `PAUSEONLY`, `MUTE`, `VOLUME_UP`, `VOLUME_DOWN`, `NEXT`, `PREV`, `STOP`, `FORWARD`, `REWIND`, `POWER`, `CLOSE_WIN`. The 13 `#@iina`-prefixed menu definitions are excluded by design, since AMP has its own menu structure.
+- Not implemented from IINA's default preset: speed on `⌘[`/`⌘]`/`⌥⌘[`/`⌥⌘]`/`⌘\` and no multiplicative speed semantics (AMP's additive rate step stands, above); chapter navigation (`⇧⌘>`/`⇧⌘<`); audio and subtitle delay (`⇧(`/`⇧)`, `Z`/`X`/`C`); subtitle scale, position and visibility (`G`/`F`, `r`/`R`/`t`, `v`, `⌥v`); loop (`⌘l`/`⌘L`); stop (`⌘.`); window scale (`⌘0`/`⌘1`/`⌘2`); editions (`E`); track cycling (`⌃⌘v`/`⌃⌘s`/`⌃⌘a`); always-on-top (`⌃⌘t`); progress display (`o`/`P`); page seeks (`⇧PGUP`/`⇧PGDN`); the `ESC`/`ENTER` fullscreen pair; mute on `⌘/`; and the media/window keys `PLAY`, `PAUSE`, `PLAYPAUSE`, `PLAYONLY`, `PAUSEONLY`, `MUTE`, `VOLUME_UP`, `VOLUME_DOWN`, `NEXT`, `PREV`, `STOP`, `FORWARD`, `REWIND`, `POWER`, `CLOSE_WIN`. The 13 `#@iina`-prefixed menu definitions are excluded by design, since AMP has its own menu structure.
 
 ## [1.6.0] — 2026-05-24
 
