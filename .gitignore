@@ -39,3 +39,8 @@ playground.xcworkspace
 
 # Generated media regression fixtures (recreate with the script in scripts/)
 Test Fixtures/Generated/
+
+# Agent-tooling scratch
+AGENTS.md
+.claude/
+.gitnexus/
