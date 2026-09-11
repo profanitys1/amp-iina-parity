@@ -13,6 +13,16 @@ and is explicitly not executed.
 - Repository `/Users/filip/src/amp`, branch `iina-parity`, HEAD
   `b065b2b` (`Sit the floating card flush with the bottom edge`), 27 commits
   over `upstream/main` (`f30f8cf`, the local snapshot), working tree clean.
+- **Follow-up commits after this document was first written** (both recorded
+  here for accuracy): `292976a` added this document itself, and `9b6f1fd`
+  (`Close the verification gaps in the changelog, README and chrome test`)
+  applied the final-verification-wave findings — a fade-timings bullet and the
+  speed-chord not-implemented group in `CHANGELOG.md`, the eight-failing-tests
+  note in `README.md` and in this file's Limits, and a temporary-directory
+  default for the chrome test's evidence output. The tip is therefore
+  **29 commits** over the local snapshot; no product source changed after
+  `b065b2b` except that one test file, and the suite was re-run green at the
+  follow-up tip (`$EVID/final-f3-suite-tip.xcresult`).
 - Build and test route: scheme `Aagedal Media Player`, destination
   `platform=macOS`, `CODE_SIGNING_ALLOWED=NO`, invoked through `xcodebuild`.
   No `project.pbxproj` change, no scheme change, no version bump:
