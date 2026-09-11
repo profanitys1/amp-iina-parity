@@ -219,8 +219,7 @@ final class PlayerWindowCoordinator: ObservableObject {
                     self.droppedURLResults = nil
                     self.droppedURLLoadProgresses = []
 
-                    let subtitles = completedURLs.filter { Self.isSubtitleFile($0) }
-                    let media = completedURLs.filter { !Self.isSubtitleFile($0) }
+                    let (subtitles, media) = Self.splitDroppedURLs(completedURLs)
 
                     // Subtitles attach to what is already playing; only media opens windows.
                     for subtitle in subtitles {
@@ -410,6 +409,17 @@ final class PlayerWindowCoordinator: ObservableObject {
 
     nonisolated static func isSubtitleFile(_ url: URL) -> Bool {
         subtitleExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    /// Splits one dropped batch into the subtitles that attach to the window
+    /// already playing and the media files that open their own windows.
+    nonisolated static func splitDroppedURLs(
+        _ urls: [URL]
+    ) -> (subtitles: [URL], media: [URL]) {
+        (
+            urls.filter { isSubtitleFile($0) },
+            urls.filter { !isSubtitleFile($0) }
+        )
     }
 
     nonisolated static let supportedMediaTypes: [UTType] = [
