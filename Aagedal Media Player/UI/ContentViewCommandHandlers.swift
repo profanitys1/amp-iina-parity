@@ -31,7 +31,6 @@ struct NotificationHandlers: ViewModifier {
     let openCompareFilePanel: () -> Void
     let toggleLoupeControls: () -> Void
     let toggleReviewNotes: () -> Void
-    let toggleComparisonControls: () -> Void
     let addSubtitle: (URL) -> Void
 
     func body(content: Content) -> some View {
@@ -51,7 +50,6 @@ struct NotificationHandlers: ViewModifier {
                 openCompareFilePanel: openCompareFilePanel,
                 toggleLoupeControls: toggleLoupeControls,
                 toggleReviewNotes: toggleReviewNotes,
-                toggleComparisonControls: toggleComparisonControls,
                 addSubtitle: addSubtitle
             ))
             .modifier(PlaybackHandlers(
@@ -89,7 +87,6 @@ private struct FileAndWindowHandlers: ViewModifier {
     let openCompareFilePanel: () -> Void
     let toggleLoupeControls: () -> Void
     let toggleReviewNotes: () -> Void
-    let toggleComparisonControls: () -> Void
     let addSubtitle: (URL) -> Void
     @AppStorage(AppSettings.scopeDisplayMode.key)
     private var scopeDisplayMode = AppSettings.scopeDisplayMode.defaultValue
@@ -172,12 +169,6 @@ private struct FileAndWindowHandlers: ViewModifier {
                       case .toggleReviewNotes = command else { return }
                 guard WindowManager.shared.isActiveWindow(nsWindow) else { return }
                 toggleReviewNotes()
-            }
-            .onReceive(NotificationCenter.default.appCommandPublisher) { notification in
-                guard let command = notification.appCommand,
-                      case .toggleComparisonControls = command else { return }
-                guard WindowManager.shared.isActiveWindow(nsWindow) else { return }
-                toggleComparisonControls()
             }
             .onReceive(NotificationCenter.default.appCommandPublisher) { notification in
                 guard let command = notification.appCommand,

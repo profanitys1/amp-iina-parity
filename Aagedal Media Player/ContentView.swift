@@ -119,7 +119,6 @@ struct ContentView: View {
                 openCompareFilePanel: openCompareFilePanel,
                 toggleLoupeControls: { showLoupeControls.toggle() },
                 toggleReviewNotes: { showReviewNotes.toggle() },
-                toggleComparisonControls: { showComparisonControls.toggle() },
                 addSubtitle: { controller.addSubtitle(url: $0) }
             ))
     }

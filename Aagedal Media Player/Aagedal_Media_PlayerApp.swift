@@ -173,11 +173,6 @@ struct Aagedal_Media_PlayerApp: App {
                 .keyboardShortcut("d", modifiers: [.command, .shift])
                 .disabled(!mediaLoaded)
 
-                Button("Comparison Controls") {
-                    NotificationCenter.default.post(.toggleComparisonControls)
-                }
-                .disabled(isCompareModeActive != true)
-
                 Button("Inspection Loupe") {
                     NotificationCenter.default.post(.toggleInspectionLoupe)
                 }

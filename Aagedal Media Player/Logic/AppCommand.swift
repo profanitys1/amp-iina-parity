@@ -42,7 +42,6 @@ enum AppCommand {
     case openComparisonFile
     case toggleInspectionLoupe
     case toggleReviewNotes
-    case toggleComparisonControls
     case openSubtitleFile
 
     enum PlaybackEdge {
