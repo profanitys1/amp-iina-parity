@@ -52,12 +52,16 @@ All notable changes to Aagedal Media Player.
   the comparison timeline.
 - Deterministic source-derived Compare Mode demo fixtures and a concise release
   recording run sheet.
+- An IINA-style floating control card for ordinary playback: a 460 pt card with 12 pt corners, centred transport, volume/subtitle/playlist controls, a slim chapter-aware scrubber with hover thumbnails, and a position that persists across launches.
+- A filename-only title bar over the picture, inset to clear the traffic lights, replacing the tool strip that previously mixed playback and inspection controls.
+- A playlist sidebar listing the folder's other media beside the current file, plus automatic subtitle-track selection on open and drop-to-attach for external subtitle files.
+- Keyboard parity with the installed IINA default preset for the playback surface: Up/Down adjust volume (±5, with Option for ±1), Option+Left/Right and `.`/`,` step frames, `p` pauses, `f` and `⌃⌘F` toggle fullscreen, and `⌘←`/`⌘→` move between files in the folder.
+- `[`/`]` step the playback rate outside Compare wipe mode, where they continue to nudge the wipe.
 
 ### Changed
 - Add explicit Retry Save for failed review-note writes, flush current text drafts before retrying, and prevent reload from discarding unsaved changes.
 - Preserve pending review-note edits before switching copies, migrating timebases or exporting, and keep the original review active if source timing changes during migration saving.
 - Preserve exact broadcast frame rates from decimal metadata so drop-frame review timecodes and editor-marker exports use the correct rational timebase. Existing reviews retain their stored rates and are never silently retimed.
-- Comparison controls collapse into a scrollable popover when the toolbar is too narrow, keeping review, exit, loupe, and inspector actions visible.
 - Apply standards-based rear-speaker weighting to explicitly identified conventional 7.1 loudness analysis while preserving source samples and true peaks; retain qualification for unknown or uncorrected layouts.
 - Review-note accessibility labels identify seek, classification, inclusive-range, note-text, and deletion controls with source-A frame context; range actions adapt to available width and relink paths expose their full values.
 - Timeline zoom starts in the timeline context menu; its extra controls appear only while zoomed and disappear on Fit.
@@ -83,6 +87,9 @@ All notable changes to Aagedal Media Player.
   skipped or metric-free runs.
 - Keep paired playback synchronized through active timeline scrubbing and
   primary-file loop boundaries across all backend combinations.
+- Plain Left/Right seek five seconds (Shift ten, Option one frame), matching IINA's arrow-key seeking.
+- Up/Down no longer step frames: they adjust volume, and the fullscreen menu item moves from `⌘F` to `⌃⌘F`.
+- The README and the in-app key table now document the real bindings, including the `[`/`]` rate-versus-wipe precedence.
 
 ### Fixed
 - Prevent queued comparison-note saves from beginning after comparison mode closes or its source pair changes.
@@ -117,6 +124,14 @@ All notable changes to Aagedal Media Player.
   metadata is loading.
 - Kept an AVFoundation secondary within the one-frame recovery budget under
   sustained UHD/HDR load by compensating its exact asynchronous seek latency.
+
+### Removed
+- The "Comparison Controls" View-menu item and the comparison settings/file-actions popover it opened, together with the focus plumbing only that popover used. This supersedes the earlier unreleased note that "comparison controls collapse into a scrollable popover": that popover no longer exists. The controls it exposed - compare view mode beyond A/B, frame resolution, audio source, compared-channel isolation, safe-area and aspect-ratio guides, overlay blend, difference gain outside the scope window, scope source in overlay mode, B/A alignment offset, mismatch and audio-layout popovers - no longer have a UI. The underlying engine APIs remain and are still exercised by the live-backend tests.
+
+### Known issues
+- Compare Mode has had no exit control since `711fd80`: leave it by opening another file or closing the window.
+- Deliberate departures from IINA's defaults: `⇧←`/`⇧→` seek ±10 s instead of IINA's subtitle seek, the rate step is AMP's additive 0.5 (clamped 0.25…8.0) with no reset binding, `⇧↑`/`⇧↓` keep an AMP-specific ±10-frame jump, and `q` stays unbound in favour of `⌘Q`.
+- Not implemented from IINA's default preset: chapter navigation (`⇧⌘>`/`⇧⌘<`); audio and subtitle delay (`⇧(`/`⇧)`, `Z`/`X`/`C`); subtitle scale, position and visibility (`G`/`F`, `r`/`R`/`t`, `v`, `⌥v`); loop (`⌘l`/`⌘L`); stop (`⌘.`); window scale (`⌘0`/`⌘1`/`⌘2`); editions (`E`); track cycling (`⌃⌘v`/`⌃⌘s`/`⌃⌘a`); always-on-top (`⌃⌘t`); progress display (`o`/`P`); page seeks (`⇧PGUP`/`⇧PGDN`); the `ESC`/`ENTER` fullscreen pair; mute on `⌘/`; and the media/window keys `PLAY`, `PAUSE`, `PLAYPAUSE`, `PLAYONLY`, `PAUSEONLY`, `MUTE`, `VOLUME_UP`, `VOLUME_DOWN`, `NEXT`, `PREV`, `STOP`, `FORWARD`, `REWIND`, `POWER`, `CLOSE_WIN`. The 13 `#@iina`-prefixed menu definitions are excluded by design, since AMP has its own menu structure.
 
 ## [1.6.0] — 2026-05-24
 
