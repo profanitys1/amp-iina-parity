@@ -103,6 +103,11 @@ struct WindowConfigurator: NSViewRepresentable {
             window.isRestorable = false
             window.setFrameAutosaveName("")
             window.backgroundColor = .black
+            // Video runs edge to edge under a transparent titlebar; the traffic
+            // lights float over the picture and fade with the overlay controls.
+            window.styleMask.insert(.fullSizeContentView)
+            window.titlebarAppearsTransparent = true
+            window.titleVisibility = .hidden
             coordinator.applyTrafficLightAlpha(window, animated: false)
             // Set initial minimum size (base values; updated when video loads).
             coordinator.applyMinSize(window, ratio: nil)

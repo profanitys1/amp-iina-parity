@@ -386,6 +386,8 @@ struct ContentView: View {
             if isMediaLoaded {
                 topToolbar
                     .transition(.move(edge: .top).combined(with: .opacity))
+                    // Clear the traffic lights, which now sit over the picture.
+                    .padding(.leading, 78)
             }
 
             Spacer(minLength: 0)
@@ -402,6 +404,14 @@ struct ContentView: View {
             )
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .frame(minWidth: 20)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(.white.opacity(0.12), lineWidth: 0.5)
+            )
+            .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 12)
         }
         .onHover { hovering in
             overlayController.setControlsHovered(hovering)
