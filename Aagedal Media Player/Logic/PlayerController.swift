@@ -177,6 +177,7 @@ final class PlayerController: ObservableObject {
     private var mpvSourceSizeCancellable: AnyCancellable?
     private var mpvGammaCancellable: AnyCancellable?
     private var mpvSigPeakCancellable: AnyCancellable?
+    private var mpvDecoderCancellable: AnyCancellable?
     private var mpvIsPlayingCancellable: AnyCancellable?
     private var mpvBackwardFailureCancellable: AnyCancellable?
     private var mpvErrorCancellable: AnyCancellable?
@@ -208,6 +209,11 @@ final class PlayerController: ObservableObject {
     // MARK: - Initialization
 
     var playbackTimePublisher: Published<Double>.Publisher { $currentPlaybackTime }
+
+    /// The decoder mpv reports for the current backend, or `nil` when nothing
+    /// is loaded. Forwarded so the settings window can show it without holding
+    /// the per-load player instance.
+    @Published private(set) var activeHardwareDecoder: String?
 
     private let logger = Logger(subsystem: "com.aagedal.MediaPlayer", category: "PlayerController")
 
@@ -737,6 +743,18 @@ final class PlayerController: ObservableObject {
                 } else if self.frameCapture.transferFunction == .hlg {
                     self.frameCapture.contentPeakNits = self.snappedPeakNits(Float(sigPeak * 1000))
                 }
+            }
+
+        mpvDecoderCancellable = mpv.$activeHardwareDecoder
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self, weak mpv] decoder in
+                guard let self, mpv != nil,
+                      observationIdentity.matches(
+                          preparationID: self.preparationID,
+                          player: self.mpvPlayer
+                      ) else { return }
+                self.activeHardwareDecoder = decoder
+                NotificationCenter.default.post(.hardwareDecoderChanged(decoder ?? ""))
             }
 
         // Refresh audio tracks after MPV parses the media
@@ -1641,6 +1659,9 @@ final class PlayerController: ObservableObject {
         mpvSourceSizeCancellable = nil
         mpvGammaCancellable = nil
         mpvSigPeakCancellable = nil
+        mpvDecoderCancellable = nil
+        activeHardwareDecoder = nil
+        NotificationCenter.default.post(.hardwareDecoderChanged(""))
         mpvIsPlayingCancellable = nil
         mpvBackwardFailureCancellable = nil
         mpvErrorCancellable = nil

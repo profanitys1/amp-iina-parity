@@ -66,6 +66,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     @Published var videoGamma: String?
     @Published var videoSigPeak: Double = 1.0
 
+    /// The decoder mpv reports it is using. `nil` until a decoder is loaded.
+    @Published private(set) var activeHardwareDecoder: String?
+
     /// Fires when mpv itself gives up on backward playback (it emits
     /// "Backward playback is likely stuck/broken now." when its experimental
     /// algorithm can't keep up with the file — typically high-bitrate HEVC
@@ -324,6 +327,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         mpv_observe_property(mpv, 0, MPVProperty.videoParamsRotate, MPV_FORMAT_INT64)
         mpv_observe_property(mpv, 0, MPVProperty.videoParamsGamma, MPV_FORMAT_STRING)
         mpv_observe_property(mpv, 0, MPVProperty.videoParamsSigPeak, MPV_FORMAT_DOUBLE)
+        mpv_observe_property(mpv, 0, MPVProperty.hwdecCurrent, MPV_FORMAT_STRING)
 
         wakeupContext = Unmanaged.passRetained(self).toOpaque()
         mpv_set_wakeup_callback(mpv, mpvWakeupCallback, wakeupContext)
@@ -803,6 +807,12 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                         case MPVProperty.videoParamsSigPeak:
                             if let value = UnsafePointer<Double>(OpaquePointer(property.data))?.pointee, value > 0 {
                                 DispatchQueue.main.async { self.videoSigPeak = value }
+                            }
+                        case MPVProperty.hwdecCurrent:
+                            if property.format == MPV_FORMAT_STRING,
+                               let strPtr = UnsafePointer<UnsafeMutablePointer<CChar>>(OpaquePointer(property.data))?.pointee {
+                                let decoder = String(cString: strPtr)
+                                DispatchQueue.main.async { self.activeHardwareDecoder = decoder }
                             }
                         default:
                             break

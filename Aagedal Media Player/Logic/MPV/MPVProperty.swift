@@ -11,6 +11,9 @@ struct MPVProperty {
     nonisolated static let videoParamsPrimaries = "video-params/primaries"
     nonisolated static let videoParamsGamma = "video-params/gamma"
     nonisolated static let videoParamsSigPeak = "video-params/sig-peak"
+    /// The decoder mpv actually engaged. `no` means software decoding; the
+    /// property is unavailable until a decoder is loaded.
+    nonisolated static let hwdecCurrent = "hwdec-current"
 
     // Playback state
     nonisolated static let duration = "duration"
