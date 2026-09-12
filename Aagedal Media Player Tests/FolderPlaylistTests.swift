@@ -4,7 +4,7 @@ import XCTest
 
 @MainActor
 final class FolderPlaylistTests: XCTestCase {
-    private var folder: URL!
+    private nonisolated(unsafe) var folder: URL!
 
     override func setUpWithError() throws {
         folder = URL(fileURLWithPath: NSTemporaryDirectory())

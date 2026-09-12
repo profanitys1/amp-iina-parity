@@ -9,7 +9,7 @@ import XCTest
 final class TrackRefreshTimingTests: XCTestCase {
     /// mpv only opens the file once a drawable is attached, so the surface has
     /// to outlive the controller for the whole test.
-    private var retainedSurfaces: [MPVMetalLayer] = []
+    private nonisolated(unsafe) var retainedSurfaces: [MPVMetalLayer] = []
 
     override func tearDown() {
         retainedSurfaces.removeAll()

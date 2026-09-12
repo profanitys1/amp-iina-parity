@@ -234,12 +234,14 @@ final class InitialWindowViewActionButton: NSView {
     var pressedBackground = WelcomeColor.actionButtonBackgroundPressed
 
     override nonisolated func awakeFromNib() {
-        wantsLayer = true
-        layer?.cornerRadius = 6
-        layer?.backgroundColor = normalBackground.cgColor
-        addTrackingArea(NSTrackingArea(rect: bounds,
-                                       options: [.activeInKeyWindow, .mouseEnteredAndExited],
-                                       owner: self, userInfo: nil))
+        MainActor.assumeIsolated {
+            wantsLayer = true
+            layer?.cornerRadius = 6
+            layer?.backgroundColor = normalBackground.cgColor
+            addTrackingArea(NSTrackingArea(rect: bounds,
+                                           options: [.activeInKeyWindow, .mouseEnteredAndExited],
+                                           owner: self, userInfo: nil))
+        }
     }
 
     override func mouseEntered(with event: NSEvent) {
@@ -269,9 +271,11 @@ final class InitialWindowViewActionButton: NSView {
 /// popover; there is no equivalent copy here, so it is just a label.
 final class BetaIndicatorView: NSView {
     override nonisolated func awakeFromNib() {
-        wantsLayer = true
-        layer?.cornerRadius = 4
-        layer?.backgroundColor = WelcomeColor.betaLabel.cgColor
+        MainActor.assumeIsolated {
+            wantsLayer = true
+            layer?.cornerRadius = 4
+            layer?.backgroundColor = WelcomeColor.betaLabel.cgColor
+        }
     }
 }
 

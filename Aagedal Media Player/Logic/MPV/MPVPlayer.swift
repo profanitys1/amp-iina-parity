@@ -40,10 +40,13 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         DispatchQueue.getSpecific(key: Self.queueIdentityKey) != nil
     }
 
-    /// Runs `body` on mpv's serial queue. Test seam only.
+    #if DEBUG
+    /// Runs `body` on mpv's serial queue. Test seam only, so it is built out of
+    /// release binaries.
     func withMPVQueueForTesting(_ body: @MainActor () -> Void) {
         queue.sync(execute: body)
     }
+    #endif
 
     /// Last clock sample seen by the event loop, so readers never enter `queue`.
     private let clockMirror = MPVClockMirror()
@@ -69,9 +72,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     /// publishes every sample, and pausing flushes whatever was withheld.
     /// All three are touched only on `queue`, inside the mpv event loop.
     nonisolated static let timePosPublishInterval: TimeInterval = 0.1
-    private var lastTimePosPublish: TimeInterval = 0
-    private var withheldTimePos: Double?
-    private var isPlayingOnEventLoop = false
+    private nonisolated(unsafe) var lastTimePosPublish: TimeInterval = 0
+    private nonisolated(unsafe) var withheldTimePos: Double?
+    private nonisolated(unsafe) var isPlayingOnEventLoop = false
 
     // Published properties for playback state
     @Published var isPlaying = false
@@ -774,7 +777,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: - Event Handling
 
     /// Publishes the playback clock, coalesced while playing. Call on `queue`.
-    private func publishTimePos(_ value: Double) {
+    private nonisolated func publishTimePos(_ value: Double) {
         guard isPlayingOnEventLoop else {
             withheldTimePos = nil
             DispatchQueue.main.async { self.timePos = value }
@@ -792,7 +795,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
 
     /// Emits the most recent sample the coalescing window swallowed, so the
     /// readout lands on the frame playback actually stopped at. Call on `queue`.
-    private func flushWithheldTimePos() {
+    private nonisolated func flushWithheldTimePos() {
         guard let value = withheldTimePos else { return }
         withheldTimePos = nil
         lastTimePosPublish = ProcessInfo.processInfo.systemUptime

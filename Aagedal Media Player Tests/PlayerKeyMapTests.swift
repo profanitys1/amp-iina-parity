@@ -140,7 +140,8 @@ final class PlayerKeyMapTests: XCTestCase {
         let started = await waitUntil { controller.isPlaying }
         XCTAssertTrue(started, "`p` must start playback.")
         XCTAssertTrue(player.handleKeyEvent("p", [], nil))
-        await waitUntil { !controller.isPlaying }
+        let stopped = await waitUntil { !controller.isPlaying }
+        XCTAssertTrue(stopped, "`p` must pause playback.")
 
         // `[` and `]` step the rate by the app's own 0.5 additive step.
         XCTAssertEqual(controller.currentPlaybackSpeed, 1.0, accuracy: 0.001)
