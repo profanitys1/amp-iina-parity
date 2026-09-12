@@ -15,6 +15,9 @@ struct MPVProperty {
     /// property is unavailable until a decoder is loaded.
     nonisolated static let hwdecCurrent = "hwdec-current"
 
+    /// Backward-decode buffer, raised only after mpv reports a queue overflow.
+    nonisolated static let videoReversalBuffer = "video-reversal-buffer"
+
     // Playback state
     nonisolated static let duration = "duration"
     nonisolated static let timePos = "time-pos"

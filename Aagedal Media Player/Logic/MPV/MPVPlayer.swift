@@ -48,6 +48,12 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     /// Last clock sample seen by the event loop, so readers never enter `queue`.
     private let clockMirror = MPVClockMirror()
 
+    /// How far up `ReverseBufferPolicy` has climbed, or -1 before any overflow.
+    private var reversalBufferStep = -1
+
+    /// Emits once per reported reversal queue overflow.
+    let overflowDidOccur = PassthroughSubject<Void, Never>()
+
     /// mpv reports `time-pos` once per decoded frame. Publishing every one of
     /// them drives a SwiftUI invalidation at frame rate for a readout that
     /// only ever shows tenths, so while playing the clock is coalesced to the
@@ -289,18 +295,6 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
 
         checkError(mpv_set_option_string(mpv, "framedrop", "decoder+vo"), context: "framedrop")
 
-        // Buffers required for --play-direction=backward (used for reverse
-        // playback on the MPV backend). These are caps, not pre-allocations —
-        // mpv only uses what it needs to hold one GOP of decoded frames.
-        //
-        // Decoded-frame footprint: 1080p 10-bit ≈ 6 MB/frame, 4K 10-bit
-        // ≈ 25 MB/frame. A 2-second GOP at 24 fps of 4K HDR HEVC is ~1.2 GB
-        // of decoded frames, so anything under 2 GiB silently fails on
-        // Blu-ray-style content. 4 GiB gives headroom for long-GOP 4K HDR
-        // and 4K AV1 without affecting RAM use on simpler files.
-        checkError(mpv_set_option_string(mpv, "video-reversal-buffer", "4GiB"), context: "video-reversal-buffer")
-        checkError(mpv_set_option_string(mpv, "audio-reversal-buffer", "128MiB"), context: "audio-reversal-buffer")
-
         applyRenderProfileOption()
 
         checkError(mpv_set_option_string(mpv, "target-colorspace-hint", "yes"), context: "target-colorspace-hint")
@@ -513,8 +507,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     /// Backward playback decodes frames forward into the reversal buffer and
     /// emits them in reverse, so the decoder never has to handle a backward
     /// seek — fixes "Missing reference picture" failures on long-GOP files.
-    /// Requires `video-reversal-buffer` (and `audio-reversal-buffer`) to have
-    /// been set during initialization.
+    /// Requires a reversal buffer large enough to hold the file's GOP; mpv's
+    /// own default is used until it reports a queue overflow, at which point
+    /// `raiseReversalBuffer()` climbs the ladder from `ReverseBufferPolicy`.
     func setPlayDirection(_ direction: String) {
         guard let mpvCtx = mpv else { return }
         let result = direction.withCString { cstr -> Int32 in
@@ -524,6 +519,17 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         if result < 0 {
             logger.warning("setPlayDirection(\(direction)) failed: \(String(cString: mpv_error_string(result)))")
         }
+    }
+
+    /// Raises the backward-decode buffer one step. No-op once the ladder is
+    /// exhausted, so a file that overflows at every size does not loop.
+    func raiseReversalBuffer() {
+        guard let size = ReverseBufferPolicy.next(currentIndex: reversalBufferStep) else { return }
+        guard let index = ReverseBufferPolicy.index(ofBufferValue: size) else { return }
+        reversalBufferStep = index
+        setString(MPVProperty.videoReversalBuffer, size)
+        overflowDidOccur.send()
+        logger.info("Raised the reversal buffer to \(size, privacy: .public)")
     }
 
     var rate: Float {
@@ -885,6 +891,14 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                         if text.contains("Backward playback is likely stuck") {
                             DispatchQueue.main.async { [weak self] in
                                 self?.backwardPlaybackFailed.send()
+                            }
+                        }
+                        // mpv reports this when the reversal buffer is too
+                        // small for the file. Climb one step and let the
+                        // attempt run; the ladder ends at 4 GiB.
+                        if text.contains("Reversal queue overflow") {
+                            DispatchQueue.main.async { [weak self] in
+                                self?.raiseReversalBuffer()
                             }
                         }
                     }
