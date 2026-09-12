@@ -156,6 +156,64 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
+    /// Audio output, level handling, decoder threading and demuxer sizing.
+    /// Every one of these is left at mpv's own default unless the user has
+    /// changed the corresponding setting, so an untouched install behaves
+    /// exactly as it did before these options existed.
+    private func applyAudioAndDecoderOptions() {
+        let defaults = UserDefaults.standard
+
+        let passthrough = defaults.value(for: AppSettings.audioPassthroughCodecs)
+        if !passthrough.isEmpty {
+            checkError(mpv_set_option_string(mpv, "audio-spdif", passthrough), context: "audio-spdif")
+        }
+
+        // Off by default on purpose: a review tool must not quietly change the
+        // level of the thing being reviewed.
+        let replayGain = defaults.value(for: AppSettings.replayGainMode)
+        if replayGain != "no" {
+            checkError(mpv_set_option_string(mpv, "replaygain", replayGain), context: "replaygain")
+            let preamp = defaults.value(for: AppSettings.replayGainPreamp)
+            checkError(mpv_set_option_string(mpv, "replaygain-preamp", String(preamp)), context: "replaygain-preamp")
+            let clip = defaults.value(for: AppSettings.replayGainClip)
+            checkError(mpv_set_option_string(mpv, "replaygain-clip", clip ? "yes" : "no"), context: "replaygain-clip")
+            let fallback = defaults.value(for: AppSettings.replayGainFallback)
+            checkError(mpv_set_option_string(mpv, "replaygain-fallback", String(fallback)), context: "replaygain-fallback")
+        }
+
+        let gapless = defaults.value(for: AppSettings.gaplessAudio)
+        if gapless != "weak" {
+            checkError(mpv_set_option_string(mpv, "gapless-audio", gapless), context: "gapless-audio")
+        }
+
+        if defaults.value(for: AppSettings.forceAVFoundationOutput) {
+            checkError(mpv_set_option_string(mpv, "ao", "avfoundation"), context: "ao")
+        }
+
+        let videoThreads = defaults.value(for: AppSettings.videoDecodeThreads)
+        if videoThreads > 0 {
+            checkError(mpv_set_option_string(mpv, "vd-lavc-threads", String(videoThreads)), context: "vd-lavc-threads")
+        }
+        let audioThreads = defaults.value(for: AppSettings.audioDecodeThreads)
+        if audioThreads > 0 {
+            checkError(mpv_set_option_string(mpv, "ad-lavc-threads", String(audioThreads)), context: "ad-lavc-threads")
+        }
+
+        let audioLanguages = defaults.value(for: AppSettings.preferredAudioLanguages)
+        if !audioLanguages.isEmpty {
+            checkError(mpv_set_option_string(mpv, "alang", audioLanguages), context: "alang")
+        }
+
+        let maxBytes = defaults.value(for: AppSettings.demuxerMaxBytes)
+        if !maxBytes.isEmpty {
+            checkError(mpv_set_option_string(mpv, "demuxer-max-bytes", maxBytes), context: "demuxer-max-bytes")
+        }
+        let readahead = defaults.value(for: AppSettings.demuxerReadaheadSeconds)
+        if readahead > 0 {
+            checkError(mpv_set_option_string(mpv, "cache-secs", String(readahead)), context: "cache-secs")
+        }
+    }
+
     private func setupMPV() {
         guard mpv == nil else {
             logger.info("MPV already initialized, skipping setup")
@@ -229,6 +287,8 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         if isAudioTrackDisabled {
             checkError(mpv_set_option_string(mpv, "aid", "no"), context: "aid")
         }
+
+        applyAudioAndDecoderOptions()
 
         #if os(macOS)
         checkError(mpv_set_option_string(mpv, "input-media-keys", "no"), context: "input-media-keys")
@@ -1063,6 +1123,22 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         let cstr = mpv_get_property_string(mpv, name)
         defer { mpv_free(cstr) }
         return cstr == nil ? nil : String(cString: cstr!)
+    }
+
+    func setString(_ name: String, _ value: String) {
+        guard let mpvCtx = mpv else { return }
+        let result = mpv_set_property_string(mpvCtx, name, value)
+        if result < 0 {
+            logger.warning("setString \(name, privacy: .public) failed: \(String(cString: mpv_error_string(result)), privacy: .public)")
+        }
+    }
+
+    /// mpv cannot query display refresh on macOS, so the app has to tell it.
+    /// Without this mpv assumes 60 Hz and mistimes frames on a 120 Hz panel or
+    /// an external monitor running at 50.
+    func applyDisplayRefreshRate(_ fps: Double) {
+        guard fps > 0 else { return }
+        setString("display-fps-override", String(format: "%.3f", fps))
     }
 
     private func setFlag(_ name: String, _ flag: Bool) {

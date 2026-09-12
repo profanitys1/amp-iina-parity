@@ -30,6 +30,8 @@ final class MPVViewController: NSViewController {
     nonisolated(unsafe) private var willExitFullScreenObserver: NSObjectProtocol?
     nonisolated(unsafe) private var didExitFullScreenObserver: NSObjectProtocol?
     nonisolated(unsafe) private var didEndLiveResizeObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var didChangeScreenObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var screenParametersObserver: NSObjectProtocol?
     private weak var observedWindow: NSWindow?
 
     /// Tracks the drawableSize we last observed in a viewDidLayout pass,
@@ -109,6 +111,8 @@ final class MPVViewController: NSViewController {
             willExitFullScreenObserver,
             didExitFullScreenObserver,
             didEndLiveResizeObserver,
+            didChangeScreenObserver,
+            screenParametersObserver,
         ].compactMap({ $0 }) {
             NotificationCenter.default.removeObserver(token)
         }
@@ -236,6 +240,8 @@ final class MPVViewController: NSViewController {
                 willExitFullScreenObserver,
                 didExitFullScreenObserver,
                 didEndLiveResizeObserver,
+                didChangeScreenObserver,
+                screenParametersObserver,
             ].compactMap({ $0 }) {
                 NotificationCenter.default.removeObserver(token)
             }
@@ -244,9 +250,25 @@ final class MPVViewController: NSViewController {
             willExitFullScreenObserver = nil
             didExitFullScreenObserver = nil
             didEndLiveResizeObserver = nil
+            didChangeScreenObserver = nil
+            screenParametersObserver = nil
             observedWindow = window
         }
         guard let window else { return }
+
+        didChangeScreenObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeScreenNotification,
+            object: window, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyDisplayRefreshRate() }
+        }
+        screenParametersObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyDisplayRefreshRate() }
+        }
+        applyDisplayRefreshRate()
 
         willEnterFullScreenObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.willEnterFullScreenNotification,
@@ -306,6 +328,14 @@ final class MPVViewController: NSViewController {
                 self.requestReloadForSurfaceChange(reason: "didEndLiveResize")
             }
         }
+    }
+
+    /// Tells mpv the refresh rate of the display the window is actually on.
+    /// mpv has no way to query this on macOS and otherwise assumes 60 Hz, which
+    /// mistimes frames on a 120 Hz panel or a 50 Hz external monitor.
+    private func applyDisplayRefreshRate() {
+        guard let screen = view.window?.screen else { return }
+        player.applyDisplayRefreshRate(Double(screen.maximumFramesPerSecond))
     }
 
     /// Trigger a Force Reload via the same `.reloadPlayer` command

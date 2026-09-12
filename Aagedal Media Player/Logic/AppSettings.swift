@@ -29,6 +29,32 @@ nonisolated enum AppSettings {
     static let centerWindowAfterResize = AppSetting(key: "centerWindowAfterResize", defaultValue: true)
     static let playbackVolume = AppSetting(key: "playbackVolume", defaultValue: 100.0)
     static let playbackMuted = AppSetting(key: "playbackMuted", defaultValue: false)
+    static let preventDisplaySleep = AppSetting(key: "preventDisplaySleep", defaultValue: true)
+    /// Closing the last window quits. IINA defaults this off and lingers in the
+    /// dock; deliberately diverging, because a closed player should be gone.
+    static let quitWhenNoOpenedWindow = AppSetting(key: "quitWhenNoOpenedWindow", defaultValue: true)
+
+    // Audio decode and output. Defaults keep mpv's own behaviour, so an
+    // untouched install sounds exactly as it did before these existed.
+    static let audioPassthroughCodecs = AppSetting(key: "audioPassthroughCodecs", defaultValue: "")
+    static let replayGainMode = AppSetting(key: "replayGainMode", defaultValue: "no")
+    static let replayGainPreamp = AppSetting(key: "replayGainPreamp", defaultValue: 0.0)
+    static let replayGainClip = AppSetting(key: "replayGainClip", defaultValue: true)
+    static let replayGainFallback = AppSetting(key: "replayGainFallback", defaultValue: 0.0)
+    static let gaplessAudio = AppSetting(key: "gaplessAudio", defaultValue: "weak")
+    static let forceAVFoundationOutput = AppSetting(key: "forceAVFoundationOutput", defaultValue: false)
+
+    // Decoder threading. 0 means "let libavcodec decide", which is mpv's default.
+    static let videoDecodeThreads = AppSetting(key: "videoDecodeThreads", defaultValue: 0)
+    static let audioDecodeThreads = AppSetting(key: "audioDecodeThreads", defaultValue: 0)
+
+    // Preferred audio track language, comma separated, empty means no preference.
+    static let preferredAudioLanguages = AppSetting(key: "preferredAudioLanguages", defaultValue: "")
+
+    // Demuxer sizing. Backward playback and long-GOP 4K both want a bigger
+    // window than mpv's default before they stop re-seeking.
+    static let demuxerMaxBytes = AppSetting(key: "demuxerMaxBytes", defaultValue: "")
+    static let demuxerReadaheadSeconds = AppSetting(key: "demuxerReadaheadSeconds", defaultValue: 0.0)
 
     // Rendering
     static let renderProfile = AppSetting(key: "renderProfile", defaultValue: RenderProfile.chroma.rawValue)

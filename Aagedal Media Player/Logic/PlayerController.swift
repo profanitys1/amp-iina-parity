@@ -66,7 +66,16 @@ final class PlayerController: ObservableObject {
     var isReady: Bool { playbackPhase.permitsPlaybackControls }
     var playbackFailure: PlaybackFailure? { playbackPhase.failure }
     @Published var currentPlaybackTime: Double = 0
-    @Published private(set) var isPlaying: Bool = false
+    @Published private(set) var isPlaying: Bool = false {
+        didSet {
+            guard isPlaying != oldValue else { return }
+            SleepPreventer.shared.update(
+                for: self,
+                isPlaying: isPlaying,
+                isAudioOnly: mediaItem?.presentationKind == .audioOnly
+            )
+        }
+    }
     @Published private(set) var currentPlaybackSpeed: Float = 1.0
     @Published private(set) var playbackLoopCount: UInt64 = 0
     @Published private(set) var isReversing: Bool = false

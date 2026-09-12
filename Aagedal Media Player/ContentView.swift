@@ -552,6 +552,7 @@ struct ContentView: View {
         compareSession: CompareSessionController,
         audioWaveformGenerator: AudioWaveformGenerator
     ) {
+        SleepPreventer.shared.forget(controller)
         audioWaveformGenerator.cancel()
         if compareSession.isActive {
             compareSession.pause(primary: controller)
