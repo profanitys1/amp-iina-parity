@@ -211,8 +211,8 @@ final class PlayerController: ObservableObject {
     var playbackTimePublisher: Published<Double>.Publisher { $currentPlaybackTime }
 
     /// The decoder mpv reports for the current backend, or `nil` when nothing
-    /// is loaded. Forwarded so the settings window can show it without holding
-    /// the per-load player instance.
+    /// is loaded. Reset to `nil` on teardown; the per-window inspector reads it
+    /// through `MetadataInspectorView`, so each window shows its own file.
     @Published private(set) var activeHardwareDecoder: String?
 
     private let logger = Logger(subsystem: "com.aagedal.MediaPlayer", category: "PlayerController")

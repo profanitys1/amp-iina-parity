@@ -380,7 +380,7 @@ This task only observes. It does not change how `hwdec` is set, so it is indepen
 - Produces: `HardwareDecodingStatus` with `init(mpvValue: String?)`, `var isHardwareBacked: Bool`, `var label: String`, and `static let unavailable: HardwareDecodingStatus`.
 - Produces: `MPVPlayer.activeHardwareDecoder: String?` — `@Published private(set)`, main-actor, `nil` until mpv reports a value.
 - Produces: `PlayerController.activeHardwareDecoder: String?` — `@Published private(set)`, reset to `nil` on teardown.
-- Produces: `AppCommand.hardwareDecoderChanged(String)` — the cross-window carrier, matching the existing `setRenderProfile(RenderProfile)` case.
+- Delivers: the readout through `MetadataInspectorView.activeHardwareDecoder`, passed from `ContentView` — not a broadcast, because a single app-wide Settings row cannot represent per-window state.
 - Produces: `MPVProperty.hwdecCurrent` — `"hwdec-current"`.
 
 - [ ] **Step 1: Write the failing test**
@@ -530,22 +530,16 @@ Handle the event in `readEvents()`. The string-property shape already exists for
 
 Note the ordering constraint: `MPVProperty.hwdecCurrent` must appear in the same `switch` as the other cases, and `videoParamsGamma` already proves the cast is valid for `MPV_FORMAT_STRING`.
 
-- [ ] **Step 7: Carry it to the settings window**
+- [ ] **Step 7: Carry it to the per-window inspector**
 
-Settings is its own scene — `Aagedal_Media_PlayerApp.swift:297-299` is `Settings { SettingsView() }` — so it has no `PlayerController` in its environment and there is one controller per window. Use the app's existing cross-window channel, the typed `AppCommand` broadcast, exactly as `setRenderProfile` already travels.
-
-In `AppCommand.swift`, add a case after `case setRenderProfile(RenderProfile)`:
-
-```swift
-    case hardwareDecoderChanged(String)
-```
+The readout was first planned for an app-wide Settings row, carried over an `AppCommand` broadcast. That is not correct and was not built: Settings is its own scene — `Aagedal_Media_PlayerApp.swift:297-299` is `Settings { SettingsView() }` — so it has no `PlayerController` in its environment, and with two windows playing different files there is no truthful value for one global row. Do not add an `AppCommand` case for this. The per-window inspector already shows it.
 
 In `PlayerController.swift`, add beside `var playbackTimePublisher`:
 
 ```swift
     /// The decoder mpv reports for the current backend, or `nil` when nothing
-    /// is loaded. Forwarded so the settings window can show it without holding
-    /// the per-load player instance.
+    /// is loaded. Reset to `nil` on teardown; the per-window inspector reads it
+    /// through `MetadataInspectorView`, so each window shows its own file.
     @Published private(set) var activeHardwareDecoder: String?
 ```
 
@@ -561,9 +555,10 @@ In `setupMPVObservations`, add beside the `mpvSigPeakCancellable` sink (which be
                           player: self.mpvPlayer
                       ) else { return }
                 self.activeHardwareDecoder = decoder
-                NotificationCenter.default.post(.hardwareDecoderChanged(decoder ?? ""))
             }
 ```
+
+Publish only to this window's own state: there is no cross-window broadcast for the decoder.
 
 Declare the cancellable beside `mpvSigPeakCancellable` at `PlayerController.swift:179`:
 
@@ -576,40 +571,15 @@ Release it in `teardown`, beside `mpvSigPeakCancellable = nil` at `:1643`:
 ```swift
         mpvDecoderCancellable = nil
         activeHardwareDecoder = nil
-        NotificationCenter.default.post(.hardwareDecoderChanged(""))
 ```
 
-In `RenderSettingsView.swift`, add beside the view's other properties:
+In `MetadataInspectorView.swift`, add beside the view's other properties:
 
 ```swift
-    @State private var decoderStatus = HardwareDecodingStatus.unavailable
+    let activeHardwareDecoder: String?
 ```
 
-Add this section as the last child inside the existing `Form`, after the closing brace of `Section("Shaders")`:
-
-```swift
-            Section("Decoding") {
-                LabeledContent("Video decoder") {
-                    Text(decoderStatus.label)
-                        .foregroundStyle(decoderStatus.isHardwareBacked ? .primary : .secondary)
-                }
-
-                Text("Reported by mpv for the file that is playing. A codec VideoToolbox cannot decode falls back to software, which shows here as Software decoding.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-```
-
-Subscribe to the broadcast by adding after the closing brace of the `Form`:
-
-```swift
-        .onReceive(NotificationCenter.default.appCommandPublisher) { notification in
-            guard case .hardwareDecoderChanged(let value) = notification.appCommand else { return }
-            decoderStatus = HardwareDecodingStatus(mpvValue: value)
-        }
-```
-
-`appCommandPublisher` and `appCommand` are defined in `AppCommand.swift` at `:76` and `:65`; the `setRenderProfile` case shows the same shape.
+Show it in a `Section("Decoding")` inside the existing `List`, using `HardwareDecodingStatus(mpvValue: activeHardwareDecoder).label` for the row value. Pass `activeHardwareDecoder: controller.activeHardwareDecoder` from the `MetadataInspectorView(...)` construction in `ContentView.swift`.
 
 - [ ] **Step 8: Build**
 
@@ -629,7 +599,7 @@ osascript -e 'tell application "System Events" to tell process "Aagedal Media Pl
 osascript -e 'tell application "Aagedal Media Player" to quit'
 ```
 
-Expected: `1`. Opening Settings by hand and seeing the Decoding section read "Not yet decoded" is the confirmation that the broadcast plumbing is sound; it shows that value, not a crash, when no file is playing.
+Expected: `1`. Opening the inspector by hand and seeing the Decoding section read "Not yet decoded" is the confirmation that the wiring is sound; it shows that value, not a crash, when no file is playing.
 
 - [ ] **Step 10: Run the full suite**
 
