@@ -30,6 +30,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private var metalLayer: MPVMetalLayer?
     private let queue = DispatchQueue(label: "com.aagedal.mpv", qos: .userInitiated)
 
+    /// Last clock sample seen by the event loop, so readers never enter `queue`.
+    private let clockMirror = MPVClockMirror()
+
     /// mpv reports `time-pos` once per decoded frame. Publishing every one of
     /// them drives a SwiftUI invalidation at frame rate for a readout that
     /// only ever shows tenths, so while playing the clock is coalesced to the
@@ -131,6 +134,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             guard self.mpv != nil else { return }
             mpv_terminate_destroy(self.mpv)
             self.mpv = nil
+            self.clockMirror.store(nil)
         }
 
         isInitialized = false
@@ -454,14 +458,13 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
-    /// Reads mpv's playback clock directly, serialized with event handling and
-    /// teardown. The published `timePos` value is intentionally optimized for
-    /// UI observation and can be several update intervals behind the decoder.
+    /// The most recent clock sample the event loop observed.
+    ///
+    /// This never enters mpv's queue, so main-actor callers cannot stall behind
+    /// an event drain or a screenshot. It is the same sample mpv reported for
+    /// `time-pos`, just read without a round trip.
     nonisolated func playbackTimeSnapshot() -> TimeInterval? {
-        queue.sync {
-            guard let mpv else { return nil }
-            return doublePropertyLocked(MPVProperty.timePos, context: mpv)
-        }
+        clockMirror.sample()
     }
 
     /// Switch playback direction at runtime. Pass "forward" or "backward".
@@ -753,6 +756,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                         switch propertyName {
                         case MPVProperty.timePos:
                             if let value = UnsafePointer<Double>(OpaquePointer(property.data))?.pointee {
+                                self.clockMirror.store(value)
                                 self.publishTimePos(value)
                             }
                         case MPVProperty.duration:
