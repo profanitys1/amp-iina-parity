@@ -307,37 +307,34 @@ final class PlayerController: ObservableObject {
         updateEffectiveAudioChannelRouting()
     }
 
-    /// Detect and set the HDR transfer function from video metadata.
-    private func updateTransferFunction() {
-        let videoStream = mediaItem?.metadata?.primaryVideoStream
-        guard let colorTransfer = videoStream?.colorTransfer?.lowercased() else {
-            frameCapture.transferFunction = .sdr
-            frameCapture.contentPeakNits = 100
-            return
-        }
-
-        if colorTransfer.contains("smpte2084") || colorTransfer == "pq" || colorTransfer.contains("st2084") {
-            frameCapture.transferFunction = .pq
-            // Use MaxCLL or mastering display max luminance for the peak, fall back to 1000
-            let peak = peakNitsFromMetadata(videoStream, fallback: 1000)
-            frameCapture.contentPeakNits = peak
-            logger.info("HDR detected: PQ transfer function, peak \(peak) nits")
-        } else if colorTransfer.contains("arib-std-b67") || colorTransfer == "hlg" {
-            frameCapture.transferFunction = .hlg
-            let peak = peakNitsFromMetadata(videoStream, fallback: 1000)
-            frameCapture.contentPeakNits = peak
-            logger.info("HDR detected: HLG transfer function, peak \(peak) nits")
-        } else {
-            frameCapture.transferFunction = .sdr
-            frameCapture.contentPeakNits = 100
-        }
-
-        // If scopes are active, restart capture with the right pixel format.
-        // Suppress pipeline rebuild to avoid a teardown cycle that resets transferFunction.
+    /// Applies one HDR state and rebuilds the capture pipeline if it is live.
+    ///
+    /// Both the metadata path and mpv's gamma report funnel through here so
+    /// there is one teardown behaviour. `rebuildPipeline: false` matters: a
+    /// full rebuild resets `transferFunction`, so the state being applied here
+    /// would be thrown away by the restart it triggered.
+    private func applyHDRState(transferFunction: TransferFunction, peakNits: Float) {
+        frameCapture.transferFunction = transferFunction
+        frameCapture.contentPeakNits = peakNits
         if frameCapture.isCapturing {
             frameCapture.stopCapture(rebuildPipeline: false)
             frameCapture.startCapture()
         }
+    }
+
+    /// Detect and set the HDR transfer function from video metadata.
+    private func updateTransferFunction() {
+        let videoStream = mediaItem?.metadata?.primaryVideoStream
+        let transfer = HDRTransferResolver.resolve(colorTransfer: videoStream?.colorTransfer)
+
+        guard transfer != .sdr else {
+            applyHDRState(transferFunction: .sdr, peakNits: 100)
+            return
+        }
+
+        let peak = peakNitsFromMetadata(videoStream, fallback: 1000)
+        applyHDRState(transferFunction: transfer, peakNits: peak)
+        logger.info("HDR detected: \(String(describing: transfer), privacy: .public) transfer function, peak \(peak) nits")
     }
 
     /// Derive peak nits from MaxCLL or mastering display max luminance metadata.
@@ -707,22 +704,15 @@ final class PlayerController: ObservableObject {
                           preparationID: self.preparationID,
                           player: self.mpvPlayer
                       ) else { return }
-                let wasCapturing = self.frameCapture.isCapturing
                 let videoStream = self.mediaItem?.metadata?.primaryVideoStream
-                switch gamma {
-                case "pq":
-                    self.frameCapture.transferFunction = .pq
-                    self.frameCapture.contentPeakNits = self.peakNitsFromMetadata(videoStream, fallback: 1000)
-                case "hlg":
-                    self.frameCapture.transferFunction = .hlg
-                    self.frameCapture.contentPeakNits = self.peakNitsFromMetadata(videoStream, fallback: 1000)
-                default:
-                    self.frameCapture.transferFunction = .sdr
-                    self.frameCapture.contentPeakNits = 100
-                }
-                if wasCapturing {
-                    self.frameCapture.stopCapture()
-                    self.frameCapture.startCapture()
+                let transfer = HDRTransferResolver.resolve(colorTransfer: gamma)
+                if transfer == .sdr {
+                    self.applyHDRState(transferFunction: .sdr, peakNits: 100)
+                } else {
+                    self.applyHDRState(
+                        transferFunction: transfer,
+                        peakNits: self.peakNitsFromMetadata(videoStream, fallback: 1000)
+                    )
                 }
             }
 
