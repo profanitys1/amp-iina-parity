@@ -9,7 +9,7 @@ import XCTest
 @MainActor
 final class RIFXAudioDecodingTests: XCTestCase {
     func testEverySupportedEncodingDecodesActualBigEndianSamples() async throws {
-        let ffmpeg = try XCTUnwrap(FFmpegService.ffmpegPath)
+        let ffmpeg = try OptionalInput.require(path: FFmpegService.ffmpegPath, what: "The bundled ffmpeg")
         for (tag, bits) in [(1, 8), (1, 16), (1, 24), (1, 32), (1, 64), (3, 32), (3, 64)] {
             let url = try writeWave(tag: tag, bits: bits, frames: 2) { frame in
                 frame == 0 ? 0.25 : -0.25

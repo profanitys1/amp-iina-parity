@@ -35,4 +35,15 @@ final class OptionalInputTests: XCTestCase {
         setenv(variableName, "/tmp/example", 1)
         XCTAssertEqual(try OptionalInput.require(variableName), "/tmp/example")
     }
+
+    /// A nil optional is the shape a missing bundled resource arrives in.
+    func testMissingOptionalSkips() {
+        XCTAssertThrowsError(try OptionalInput.require(path: nil, what: "the bundled ffmpeg")) { error in
+            XCTAssertTrue(error is XCTSkip, "Expected XCTSkip, got \(type(of: error))")
+        }
+    }
+
+    func testPresentOptionalIsReturned() throws {
+        XCTAssertEqual(try OptionalInput.require(path: "/bin/ls", what: "a binary"), "/bin/ls")
+    }
 }

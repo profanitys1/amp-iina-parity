@@ -17,4 +17,12 @@ nonisolated enum OptionalInput {
         }
         return value
     }
+
+    /// Reads a resource whose absence is an environment problem, not a defect.
+    static func require(path: String?, what: String) throws -> String {
+        guard let path, !path.isEmpty else {
+            throw XCTSkip("\(what) is unavailable in this build.")
+        }
+        return path
+    }
 }
