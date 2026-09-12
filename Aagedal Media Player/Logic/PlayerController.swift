@@ -1332,6 +1332,25 @@ final class PlayerController: ObservableObject {
         return max(0, currentPlaybackTime.isFinite ? currentPlaybackTime : 0)
     }
 
+    /// Non-blocking companion to `playbackTimeSnapshot()`, for callers that can
+    /// tolerate a frame of lag in exchange for never stalling the main actor.
+    ///
+    /// On the MPV backend this reads the event loop's last observed sample
+    /// instead of entering mpv's queue; that value can lag by up to one decoded
+    /// frame and is stale across a seek until the next `time-pos`. Do not use it
+    /// to position either backend — use `playbackTimeSnapshot()` for that.
+    func nonBlockingPlaybackTimeSnapshot() -> TimeInterval {
+        if useMPV,
+           let time = mpvPlayer?.nonBlockingPlaybackTimeSnapshot(),
+           time.isFinite {
+            return max(0, time)
+        }
+        if let time = player?.currentTime().seconds, time.isFinite {
+            return max(0, time)
+        }
+        return max(0, currentPlaybackTime.isFinite ? currentPlaybackTime : 0)
+    }
+
     func toggleFullscreen() {
         let window = playerView?.window ?? NSApp.keyWindow
         window?.toggleFullScreen(nil)

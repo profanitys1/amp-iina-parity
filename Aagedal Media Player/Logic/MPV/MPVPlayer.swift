@@ -486,12 +486,26 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
-    /// The most recent clock sample the event loop observed.
-    ///
-    /// This never enters mpv's queue, so main-actor callers cannot stall behind
-    /// an event drain or a screenshot. It is the same sample mpv reported for
-    /// `time-pos`, just read without a round trip.
+    /// Reads mpv's playback clock directly, serialized with event handling and
+    /// teardown. The published `timePos` value is intentionally optimized for
+    /// UI observation and can be several update intervals behind the decoder.
     nonisolated func playbackTimeSnapshot() -> TimeInterval? {
+        queue.sync {
+            guard let mpv else { return nil }
+            return doublePropertyLocked(MPVProperty.timePos, context: mpv)
+        }
+    }
+
+    /// The most recent clock sample the event loop observed, read without
+    /// entering mpv's queue.
+    ///
+    /// Prefer `playbackTimeSnapshot()` wherever the value has to be exact. This
+    /// one never blocks, so a main-actor caller cannot stall behind an event
+    /// drain or a screenshot — but that is bought with two real losses of
+    /// liveness: the value lags by up to one decoded frame, and it stays stale
+    /// across a seek until mpv emits the next `time-pos` change. Use it only
+    /// where a frame of lag is acceptable, such as the drift loop's sampling.
+    nonisolated func nonBlockingPlaybackTimeSnapshot() -> TimeInterval? {
         clockMirror.sample()
     }
 

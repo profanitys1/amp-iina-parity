@@ -2031,7 +2031,7 @@ final class CompareSessionController: ObservableObject {
             var isRateNudged = false
             var rateNudgeStartTime: TimeInterval?
             let monitoringStartTime = ProcessInfo.processInfo.systemUptime
-            var previousPrimaryTime = primary.playbackTimeSnapshot()
+            var previousPrimaryTime = primary.nonBlockingPlaybackTimeSnapshot()
             while !Task.isCancelled,
                   self.loadGeneration.isCurrent(generation),
                   self.isActive {
@@ -2039,8 +2039,8 @@ final class CompareSessionController: ObservableObject {
                 guard !Task.isCancelled,
                       primary.isPlaying else { continue }
 
-                let primaryBefore = primary.playbackTimeSnapshot()
-                let primaryAfter = primary.playbackTimeSnapshot()
+                let primaryBefore = primary.nonBlockingPlaybackTimeSnapshot()
+                let primaryAfter = primary.nonBlockingPlaybackTimeSnapshot()
                 let primaryTime = (primaryBefore + primaryAfter) / 2
                 let didWrapForward = policy.didWrapForward(
                     previousPrimaryTime: previousPrimaryTime,
