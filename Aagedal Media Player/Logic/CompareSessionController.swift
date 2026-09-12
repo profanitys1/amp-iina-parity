@@ -2096,6 +2096,12 @@ final class CompareSessionController: ObservableObject {
 
                 let actual = self.secondaryController.playbackTimeSnapshot()
                 let expected = self.mappedSecondaryTime(for: primaryTime)
+                // Half the spread between the two reads above. This is live
+                // for an AVFoundation primary, where both reads hit the player
+                // clock and the spread measures read jitter, and zero for an
+                // MPV primary, where both return one mirrored sample. It is not
+                // dead arithmetic: deleting it would leave the AVFoundation
+                // path subtracting nothing and correcting sooner.
                 let readUncertainty = abs(primaryAfter - primaryBefore) / 2
                 let sampleTime = ProcessInfo.processInfo.systemUptime
                 guard sampleTime - monitoringStartTime >=

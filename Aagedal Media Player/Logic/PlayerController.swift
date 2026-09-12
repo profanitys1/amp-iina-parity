@@ -1304,6 +1304,10 @@ final class PlayerController: ObservableObject {
     /// Reads the backend clock directly for frame-sensitive review actions.
     /// Published playback time is optimized for UI observation and can trail
     /// a playing AVPlayer by more than one high-frame-rate video frame.
+    ///
+    /// Falls back to that published value when neither backend has reported a
+    /// clock yet — the window between a load and the first frame — so a caller
+    /// that must have a live reading should wait for `isReady` first.
     func playbackTimeSnapshot() -> TimeInterval {
         if useMPV,
            let time = mpvPlayer?.playbackTimeSnapshot(),

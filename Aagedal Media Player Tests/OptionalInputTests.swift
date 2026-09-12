@@ -46,4 +46,12 @@ final class OptionalInputTests: XCTestCase {
     func testPresentOptionalIsReturned() throws {
         XCTAssertEqual(try OptionalInput.require(path: "/bin/ls", what: "a binary"), "/bin/ls")
     }
+
+    /// An empty path is as useless as a nil one, and `Bundle.path(forResource:)`
+    /// is not guaranteed to answer with nil rather than an empty string.
+    func testEmptyOptionalPathSkips() {
+        XCTAssertThrowsError(try OptionalInput.require(path: "", what: "the bundled ffmpeg")) { error in
+            XCTAssertTrue(error is XCTSkip, "Expected XCTSkip, got \(type(of: error))")
+        }
+    }
 }

@@ -33,6 +33,14 @@ struct MetadataInspectorView: View {
 
     var body: some View {
         List {
+            // The decoder comes from the backend rather than from the file, so
+            // it is worth showing even when metadata extraction failed. The
+            // AVFoundation path is reserved for ProRes RAW and never reports a
+            // hardware decoder, so saying so beats reporting a pending one.
+            Section("Decoding") {
+                metadataRow("Video decoder", value: useMPV ? decoderStatus.label : "AVFoundation")
+            }
+
             if let metadata = metadata {
                 // File
                 Section("File") {
@@ -41,10 +49,6 @@ struct MetadataInspectorView: View {
                         metadataRow("Duration", value: formatDuration(duration))
                     }
                     metadataRow("Size", value: item.formattedSize)
-                }
-
-                Section("Decoding") {
-                    metadataRow("Video decoder", value: decoderStatus.label)
                 }
 
                 // Container
