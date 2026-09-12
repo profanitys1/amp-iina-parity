@@ -592,6 +592,11 @@ final class PlayerController: ObservableObject {
                       ) else { break }
                 if isLoaded {
                     guard self.playbackFailure == nil else { break }
+                    // mpv has the demuxer open and the track and chapter lists
+                    // populated here, which is the signal the fixed 0.5 s wait
+                    // was standing in for.
+                    self.refreshAudioTrackOptions(playerItem: nil)
+                    self.refreshChapterOptions(playerItem: nil)
                     self.markPlaybackReady(isBuffering: mpv.isBusy)
                     break
                 }
@@ -745,17 +750,6 @@ final class PlayerController: ObservableObject {
                       ) else { return }
                 self.activeHardwareDecoder = decoder
             }
-
-        // Refresh audio tracks after MPV parses the media
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self, weak mpv] in
-            guard let self, mpv != nil,
-                  observationIdentity.matches(
-                      preparationID: self.preparationID,
-                      player: self.mpvPlayer
-                  ) else { return }
-            self.refreshAudioTrackOptions(playerItem: nil)
-            self.refreshChapterOptions(playerItem: nil)
-        }
 
         // Install MPV loop observer
         installMPVLoopObserver()
