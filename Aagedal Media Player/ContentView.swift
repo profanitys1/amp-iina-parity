@@ -30,8 +30,6 @@ struct ContentView: View {
     @State private var showCompareModeCallout = false
     @State private var isToolbarControlFocused = false
     @State private var timecodeActivationTrigger: String?
-    @AppStorage(AppSettings.showCursorHideHint.key)
-    private var showCursorHideHint = AppSettings.showCursorHideHint.defaultValue
     @AppStorage(AppSettings.didShowCompareModeCallout.key)
     private var didShowCompareModeCallout = AppSettings.didShowCompareModeCallout.defaultValue
     @ObservedObject private var updateChecker = UpdateChecker.shared
@@ -46,7 +44,6 @@ struct ContentView: View {
     @AppStorage(AppSettings.audioWaveformBackground.key)
     private var audioWaveformBackground = AppSettings.audioWaveformBackground.defaultValue
 
-    private let rightEdgeWidth: CGFloat = 60
 
     private enum InspectorTab: String, CaseIterable, Identifiable {
         case playlist
@@ -235,11 +232,6 @@ struct ContentView: View {
                 }
                 .allowsHitTesting(false)
             }
-
-            // Layer 7: right-edge cursor hide zone
-            if isMediaLoaded && !showInspector {
-                cursorHideZone
-            }
         }
         .ignoresSafeArea()
         .focusedSceneValue(\.isMediaLoaded, isMediaLoaded)
@@ -252,7 +244,7 @@ struct ContentView: View {
             WindowConfigurator(
                 aspectRatio: videoAspectRatio,
                 videoSourceSize: videoSourceSize,
-                showTrafficLights: overlayController.isWindowHovered && !overlayController.isRightEdgeHovered,
+                showTrafficLights: overlayController.isWindowHovered,
                 onWindowAvailable: { window in
                     windowCoordinator.accept(
                         window,
@@ -567,48 +559,6 @@ struct ContentView: View {
         compareSession.stop()
         controller.cancelMediaOperationsForWindowClose()
         controller.teardown()
-    }
-
-    // MARK: - Cursor Hide Zone
-
-    private var cursorHideZone: some View {
-        HStack {
-            Spacer()
-            ZStack {
-                CursorHideZone { hovering in
-                    overlayController.setRightEdgeHovered(
-                        hovering,
-                        isPlaying: { controller.isPlaying },
-                        isControlInteractionActive: { isControlInteractionActive }
-                    )
-                }
-
-                // Discoverability hint — visible with overlay, hidden with it
-                if showCursorHideHint {
-                    RoundedRectangle(cornerRadius: 6)
-                        .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                        .foregroundStyle(.white.opacity(0.25))
-                        .overlay {
-                            ZStack {
-                                Image(systemName: "cursorarrow")
-                                    .font(.system(size: 14))
-                                // Diagonal slash through the cursor
-                                Rectangle()
-                                    .frame(width: 18, height: 1.5)
-                                    .rotationEffect(.degrees(-45))
-                            }
-                            .foregroundStyle(.white.opacity(0.3))
-                        }
-                        .padding(6)
-                        .opacity(showOverlay && !overlayController.isRightEdgeHovered ? 1 : 0)
-                        .animation(.easeInOut(duration: 0.25), value: showOverlay)
-                        .animation(.easeInOut(duration: 0.3), value: overlayController.isRightEdgeHovered)
-                        .allowsHitTesting(false)
-                }
-            }
-            .frame(width: rightEdgeWidth)
-        }
-        .padding(.bottom, 80)
     }
 
     // MARK: - File Opening

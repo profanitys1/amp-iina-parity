@@ -18,7 +18,6 @@ nonisolated enum AppSettings {
     // Windows and playback
     static let allowMultipleWindows = AppSetting(key: "allowMultipleWindows", defaultValue: false)
     static let syncPlaybackControls = AppSetting(key: "syncPlaybackControls", defaultValue: false)
-    static let showCursorHideHint = AppSetting(key: "showCursorHideHint", defaultValue: true)
     static let didShowCompareModeCallout = AppSetting(
         key: "didShowCompareModeCallout",
         defaultValue: false
@@ -90,7 +89,6 @@ nonisolated enum AppSettings {
         defaults.register(defaults: [
             allowMultipleWindows.key: allowMultipleWindows.defaultValue,
             syncPlaybackControls.key: syncPlaybackControls.defaultValue,
-            showCursorHideHint.key: showCursorHideHint.defaultValue,
             didShowCompareModeCallout.key: didShowCompareModeCallout.defaultValue,
             precisionScrubFactor.key: precisionScrubFactor.defaultValue,
             showTimelineDetails.key: showTimelineDetails.defaultValue,

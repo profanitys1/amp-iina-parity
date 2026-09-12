@@ -12,11 +12,11 @@ final class PlayerOverlayController: ObservableObject {
     @Published private(set) var isVisible = true
     @Published private(set) var isWindowHovered = false
     @Published private(set) var isControlsHovered = false
-    @Published private(set) var isRightEdgeHovered = false
 
     private var hideTask: Task<Void, Never>?
     private var mouseMoveMonitor: Any?
     private var keyDownMonitor: Any?
+    private var mouseDownMonitor: Any?
     private var appActiveObserver: NSObjectProtocol?
     private let hideDelay: Duration
 
@@ -39,12 +39,10 @@ final class PlayerOverlayController: ObservableObject {
             guard let self,
                   isMediaLoaded(),
                   self.isWindowHovered,
-                  !self.isRightEdgeHovered,
                   isKeyWindow() else {
                 return event
             }
 
-            CursorHideNSView.ensureCursorVisible()
             self.reveal()
             self.scheduleHide(
                 isPlaying: isPlaying,
@@ -65,6 +63,14 @@ final class PlayerOverlayController: ObservableObject {
             return event
         }
 
+        mouseDownMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        ) { [weak self] event in
+            guard let self, !self.isVisible else { return event }
+            Self.hideCursorUntilMouseMoves()
+            return event
+        }
+
         appActiveObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didBecomeActiveNotification,
             object: nil,
@@ -72,8 +78,6 @@ final class PlayerOverlayController: ObservableObject {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                self.isRightEdgeHovered = false
-                CursorHideNSView.ensureCursorVisible()
                 self.cancelScheduledHide()
                 if isControlInteractionActive() {
                     self.reveal()
@@ -96,27 +100,8 @@ final class PlayerOverlayController: ObservableObject {
         }
     }
 
-    func setRightEdgeHovered(
-        _ hovered: Bool,
-        isPlaying: @escaping @MainActor () -> Bool,
-        isControlInteractionActive: @escaping @MainActor () -> Bool
-    ) {
-        isRightEdgeHovered = hovered
-        if hovered {
-            cancelScheduledHide()
-            if !isControlInteractionActive() {
-                hide()
-            }
-        } else {
-            reveal()
-            scheduleHide(
-                isPlaying: isPlaying,
-                isControlInteractionActive: isControlInteractionActive
-            )
-        }
-    }
-
     func reveal() {
+        guard !isVisible else { return }
         isVisible = true
     }
 
@@ -131,6 +116,18 @@ final class PlayerOverlayController: ObservableObject {
     func hide() {
         isVisible = false
         cancelScheduledHide()
+        Self.hideCursorUntilMouseMoves()
+    }
+
+    /// Hides the pointer over the whole picture whenever the controls are
+    /// hidden, the way a player is expected to behave. AppKit brings it back
+    /// on the next mouse move on its own.
+    ///
+    /// Re-arm it on mouse-down as well: since Big Sur a click without any
+    /// movement makes the cursor reappear, contradicting the documented
+    /// behaviour of `setHiddenUntilMouseMoves` (Apple FB11963121).
+    static func hideCursorUntilMouseMoves() {
+        NSCursor.setHiddenUntilMouseMoves(true)
     }
 
     func scheduleHide(
@@ -146,6 +143,7 @@ final class PlayerOverlayController: ObservableObject {
             guard !Task.isCancelled, let self else { return }
             if !self.isControlsHovered, !isControlInteractionActive(), isPlaying() {
                 self.isVisible = false
+                Self.hideCursorUntilMouseMoves()
             }
         }
     }
@@ -173,6 +171,10 @@ final class PlayerOverlayController: ObservableObject {
         if let keyDownMonitor {
             NSEvent.removeMonitor(keyDownMonitor)
             self.keyDownMonitor = nil
+        }
+        if let mouseDownMonitor {
+            NSEvent.removeMonitor(mouseDownMonitor)
+            self.mouseDownMonitor = nil
         }
         if let appActiveObserver {
             NotificationCenter.default.removeObserver(appActiveObserver)

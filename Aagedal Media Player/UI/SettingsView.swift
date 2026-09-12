@@ -232,8 +232,6 @@ private struct GeneralSettingsView: View {
     private var allowMultipleWindows = AppSettings.allowMultipleWindows.defaultValue
     @AppStorage(AppSettings.syncPlaybackControls.key)
     private var syncPlaybackControls = AppSettings.syncPlaybackControls.defaultValue
-    @AppStorage(AppSettings.showCursorHideHint.key)
-    private var showCursorHideHint = AppSettings.showCursorHideHint.defaultValue
     @AppStorage(AppSettings.precisionScrubFactor.key)
     private var precisionScrubFactor = AppSettings.precisionScrubFactor.defaultValue
     @AppStorage(AppSettings.showTimelineDetails.key)
@@ -261,7 +259,6 @@ private struct GeneralSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                Toggle("Show Cursor Hide Zone Indicator", isOn: $showCursorHideHint)
                 Toggle("Open Windows at Source Resolution", isOn: $openAtSourceResolution)
                 if openAtSourceResolution {
                     Toggle("Limit Window Size to Screen", isOn: $clampWindowToScreen)

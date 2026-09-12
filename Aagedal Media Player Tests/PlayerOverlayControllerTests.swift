@@ -12,24 +12,15 @@ final class PlayerOverlayControllerTests: XCTestCase {
         var isPlaying = true
     }
 
-    func testRightEdgeHoverHidesAndLeavingRevealsOverlay() {
+    func testHideThenRevealTogglesOverlayVisibility() {
         let controller = PlayerOverlayController()
-
-        controller.setRightEdgeHovered(
-            true,
-            isPlaying: { false },
-            isControlInteractionActive: { false }
-        )
-        XCTAssertFalse(controller.isVisible)
-        XCTAssertTrue(controller.isRightEdgeHovered)
-
-        controller.setRightEdgeHovered(
-            false,
-            isPlaying: { false },
-            isControlInteractionActive: { false }
-        )
         XCTAssertTrue(controller.isVisible)
-        XCTAssertFalse(controller.isRightEdgeHovered)
+
+        controller.hide()
+        XCTAssertFalse(controller.isVisible)
+
+        controller.reveal()
+        XCTAssertTrue(controller.isVisible)
     }
 
     func testControlHoverPreventsScheduledHide() async {
@@ -98,15 +89,4 @@ final class PlayerOverlayControllerTests: XCTestCase {
         XCTAssertTrue(controller.isVisible)
     }
 
-    func testRightEdgeDoesNotHideFocusedControl() {
-        let controller = PlayerOverlayController()
-
-        controller.setRightEdgeHovered(
-            true,
-            isPlaying: { true },
-            isControlInteractionActive: { true }
-        )
-
-        XCTAssertTrue(controller.isVisible)
-    }
 }
