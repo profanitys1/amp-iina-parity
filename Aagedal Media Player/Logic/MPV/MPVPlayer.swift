@@ -30,6 +30,21 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private var metalLayer: MPVMetalLayer?
     private let queue = DispatchQueue(label: "com.aagedal.mpv", qos: .userInitiated)
 
+    /// Lets teardown detect it is already serialized on `queue`, where a
+    /// synchronous re-entry would deadlock.
+    private nonisolated static let queueIdentityKey = DispatchSpecificKey<UInt8>()
+
+    /// True when the calling thread is executing on mpv's serial queue.
+    /// `nonisolated` because `deinit` reads it to choose the teardown path.
+    nonisolated var isRunningOnMPVQueue: Bool {
+        DispatchQueue.getSpecific(key: Self.queueIdentityKey) != nil
+    }
+
+    /// Runs `body` on mpv's serial queue. Test seam only.
+    func withMPVQueueForTesting(_ body: @MainActor () -> Void) {
+        queue.sync(execute: body)
+    }
+
     /// Last clock sample seen by the event loop, so readers never enter `queue`.
     private let clockMirror = MPVClockMirror()
 
@@ -98,6 +113,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private var pendingSeekAfterLoad: Double = 0
 
     override init() {
+        queue.setSpecific(key: Self.queueIdentityKey, value: 1)
         super.init()
     }
 
@@ -108,9 +124,17 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
 
     deinit {
         // Safety net — destroy() should have been called already.
-        if mpv != nil {
-            mpv_set_wakeup_callback(mpv, nil, nil)
-            mpv_terminate_destroy(mpv)
+        if let context = mpv {
+            mpv_set_wakeup_callback(context, nil, nil)
+            // Destroy on the same queue the event loop runs on, or mpv can be
+            // freed while mpv_wait_event is still reading it. Re-entering the
+            // queue synchronously from the queue itself would deadlock, so the
+            // check picks the direct path in that one case.
+            if isRunningOnMPVQueue {
+                mpv_terminate_destroy(context)
+            } else {
+                queue.sync { mpv_terminate_destroy(context) }
+            }
             mpv = nil
         }
 
