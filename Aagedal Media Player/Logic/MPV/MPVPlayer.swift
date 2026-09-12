@@ -30,6 +30,18 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private var metalLayer: MPVMetalLayer?
     private let queue = DispatchQueue(label: "com.aagedal.mpv", qos: .userInitiated)
 
+    /// mpv reports `time-pos` once per decoded frame. Publishing every one of
+    /// them drives a SwiftUI invalidation at frame rate for a readout that
+    /// only ever shows tenths, so while playing the clock is coalesced to the
+    /// same interval IINA uses for its sync timer. Frame-accurate work happens
+    /// while paused — stepping, scrubbing, trimming — so a paused player
+    /// publishes every sample, and pausing flushes whatever was withheld.
+    /// All three are touched only on `queue`, inside the mpv event loop.
+    nonisolated static let timePosPublishInterval: TimeInterval = 0.1
+    private var lastTimePosPublish: TimeInterval = 0
+    private var withheldTimePos: Double?
+    private var isPlayingOnEventLoop = false
+
     // Published properties for playback state
     @Published var isPlaying = false
     @Published var duration: Double = 0
@@ -332,6 +344,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
 
     func stop() {
         command("stop")
+        resetTimePosCoalescing()
         isPlaying = false
         timePos = 0
         videoAspectRatio = nil
@@ -359,11 +372,22 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         }
         seekTime = max(0, seekTime)
 
+        resetTimePosCoalescing()
         command("seek", args: [String(seekTime), "absolute+keyframes"])
     }
 
     func seekRelative(_ time: TimeInterval) {
+        resetTimePosCoalescing()
         command("seek", args: [String(time), "relative"])
+    }
+
+    /// Lets the next `time-pos` sample through immediately, so a seek lands on
+    /// the readout without waiting out the coalescing window.
+    nonisolated func resetTimePosCoalescing() {
+        queue.async { [weak self] in
+            self?.lastTimePosPublish = 0
+            self?.withheldTimePos = nil
+        }
     }
 
     /// Reads mpv's playback clock directly, serialized with event handling and
@@ -620,6 +644,32 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
 
     // MARK: - Event Handling
 
+    /// Publishes the playback clock, coalesced while playing. Call on `queue`.
+    private func publishTimePos(_ value: Double) {
+        guard isPlayingOnEventLoop else {
+            withheldTimePos = nil
+            DispatchQueue.main.async { self.timePos = value }
+            return
+        }
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastTimePosPublish >= Self.timePosPublishInterval else {
+            withheldTimePos = value
+            return
+        }
+        lastTimePosPublish = now
+        withheldTimePos = nil
+        DispatchQueue.main.async { self.timePos = value }
+    }
+
+    /// Emits the most recent sample the coalescing window swallowed, so the
+    /// readout lands on the frame playback actually stopped at. Call on `queue`.
+    private func flushWithheldTimePos() {
+        guard let value = withheldTimePos else { return }
+        withheldTimePos = nil
+        lastTimePosPublish = ProcessInfo.processInfo.systemUptime
+        DispatchQueue.main.async { self.timePos = value }
+    }
+
     fileprivate nonisolated func readEvents() {
         queue.async { [weak self] in
             guard let self, self.mpv != nil else { return }
@@ -639,7 +689,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                         switch propertyName {
                         case MPVProperty.timePos:
                             if let value = UnsafePointer<Double>(OpaquePointer(property.data))?.pointee {
-                                DispatchQueue.main.async { self.timePos = value }
+                                self.publishTimePos(value)
                             }
                         case MPVProperty.duration:
                             if let value = UnsafePointer<Double>(OpaquePointer(property.data))?.pointee {
@@ -647,6 +697,8 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                             }
                         case MPVProperty.pause:
                             if let value = UnsafePointer<Int>(OpaquePointer(property.data))?.pointee {
+                                self.isPlayingOnEventLoop = value == 0
+                                self.flushWithheldTimePos()
                                 DispatchQueue.main.async { self.isPlaying = value == 0 }
                             }
                         case MPVProperty.pausedForCache:
