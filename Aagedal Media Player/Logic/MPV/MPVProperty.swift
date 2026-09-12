@@ -18,6 +18,10 @@ struct MPVProperty {
     /// Backward-decode buffer, raised only after mpv reports a queue overflow.
     nonisolated static let videoReversalBuffer = "video-reversal-buffer"
 
+    /// Audio half of the same buffer. mpv reports an audio overflow with the
+    /// same log line it uses for video, so the two move in step.
+    nonisolated static let audioReversalBuffer = "audio-reversal-buffer"
+
     // Playback state
     nonisolated static let duration = "duration"
     nonisolated static let timePos = "time-pos"

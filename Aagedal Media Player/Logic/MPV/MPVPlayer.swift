@@ -49,7 +49,14 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private let clockMirror = MPVClockMirror()
 
     /// How far up `ReverseBufferPolicy` has climbed, or -1 before any overflow.
+    /// Reset when a file finishes loading, so a later file does not inherit the
+    /// buffer size an earlier one needed.
     private var reversalBufferStep = -1
+
+    /// When the ladder last moved, or `nil` if it has not moved yet. mpv prints
+    /// the overflow line once per discarded frame, so the climb is rate-limited
+    /// to `ReverseBufferPolicy.cooldown`.
+    private var lastReversalBufferRaise: TimeInterval?
 
     /// Emits once per reported reversal queue overflow.
     let overflowDidOccur = PassthroughSubject<Void, Never>()
@@ -521,15 +528,22 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
-    /// Raises the backward-decode buffer one step. No-op once the ladder is
-    /// exhausted, so a file that overflows at every size does not loop.
+    /// Raises both backward-decode buffers one step. No-op once the ladder is
+    /// exhausted, so a file that overflows at every size does not loop, and
+    /// no-op inside the cooldown, because mpv repeats the overflow line for
+    /// every discarded frame.
     func raiseReversalBuffer() {
-        guard let size = ReverseBufferPolicy.next(currentIndex: reversalBufferStep) else { return }
-        guard let index = ReverseBufferPolicy.index(ofBufferValue: size) else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        let elapsed: TimeInterval? = lastReversalBufferRaise.map { now - $0 }
+        guard ReverseBufferPolicy.canRaise(elapsedSinceLastRaise: elapsed) else { return }
+        guard let rung = ReverseBufferPolicy.next(currentIndex: reversalBufferStep) else { return }
+        guard let index = ReverseBufferPolicy.index(ofVideoValue: rung.video) else { return }
         reversalBufferStep = index
-        setString(MPVProperty.videoReversalBuffer, size)
+        lastReversalBufferRaise = now
+        setString(MPVProperty.videoReversalBuffer, rung.video)
+        setString(MPVProperty.audioReversalBuffer, rung.audio)
         overflowDidOccur.send()
-        logger.info("Raised the reversal buffer to \(size, privacy: .public)")
+        logger.info("Raised the reversal buffers to \(rung.video, privacy: .public) video / \(rung.audio, privacy: .public) audio")
     }
 
     var rate: Float {
@@ -893,10 +907,12 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                                 self?.backwardPlaybackFailed.send()
                             }
                         }
-                        // mpv reports this when the reversal buffer is too
-                        // small for the file. Climb one step and let the
-                        // attempt run; the ladder ends at 4 GiB.
-                        if text.contains("Reversal queue overflow") {
+                        // mpv reports this when a reversal buffer is too small
+                        // for the file. Climb one step and let the running
+                        // reversal filter pick the new size up — it re-reads
+                        // its options on every enqueued frame, so no restart of
+                        // backward playback is needed. The ladder ends at 4 GiB.
+                        if ReverseBufferPolicy.isOverflowLogLine(text) {
                             DispatchQueue.main.async { [weak self] in
                                 self?.raiseReversalBuffer()
                             }
@@ -906,6 +922,10 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                 case MPV_EVENT_FILE_LOADED:
                     DispatchQueue.main.async {
                         self.logger.info("MPV file loaded")
+                        // A new file starts at mpv's own buffer size again, so
+                        // it does not inherit what the previous file needed.
+                        self.reversalBufferStep = -1
+                        self.lastReversalBufferRaise = nil
                         self.isFileLoaded = true
                         if self.pendingSeekAfterLoad > 0 {
                             self.seek(to: self.pendingSeekAfterLoad)
