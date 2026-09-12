@@ -185,6 +185,7 @@ final class PlayerController: ObservableObject {
     private var mpvDurationTask: Task<Void, Never>?
     private var playbackPreparationTask: Task<Void, Never>?
     private var scopePlaybackResumeTask: Task<Void, Never>?
+    private var surfaceReloadResumeTask: Task<Void, Never>?
     private let proResRAWDetector: ProResRAWDetector
 
     /// Monotonically increasing counter invalidating stale async work from
@@ -396,6 +397,33 @@ final class PlayerController: ObservableObject {
             return subtype == aprn || subtype == aprh
         } catch {
             return false
+        }
+    }
+
+    /// Recreate the backend at the current position without stranding the user
+    /// on a paused picture. `preparePlayback` always comes back paused, so a
+    /// reload triggered by the app itself — a surface change, Force Reload —
+    /// would otherwise stop playback the user never asked to stop.
+    func reloadPreservingPlaybackState() {
+        let wasPlaying = isPlaying
+        let resumeTime = playbackTimeSnapshot()
+        preparePlayback(startTime: resumeTime, resetAudioSelection: false)
+        guard wasPlaying else { return }
+        // teardown() inside preparePlayback has already advanced the ID, so
+        // this is the generation the resume belongs to.
+        let prepID = preparationID
+        surfaceReloadResumeTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            for await phase in self.$playbackPhase.values {
+                guard !Task.isCancelled, self.preparationID == prepID else { return }
+                if case .failed = phase { break }
+                if phase.permitsPlaybackControls {
+                    self.play()
+                    break
+                }
+            }
+            guard self.preparationID == prepID else { return }
+            self.surfaceReloadResumeTask = nil
         }
     }
 
@@ -1549,6 +1577,8 @@ final class PlayerController: ObservableObject {
         playbackPreparationTask = nil
         scopePlaybackResumeTask?.cancel()
         scopePlaybackResumeTask = nil
+        surfaceReloadResumeTask?.cancel()
+        surfaceReloadResumeTask = nil
 
         cancelPendingScrubSeeks()
 

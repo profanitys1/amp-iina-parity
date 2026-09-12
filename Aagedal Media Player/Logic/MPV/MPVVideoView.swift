@@ -329,6 +329,17 @@ final class MPVViewController: NSViewController {
             scalingLogger.info("requestReloadForSurfaceChange: \(reason) — paired surface owns reload")
             return
         }
+        // The stale dst rect is a paused-stream bug: the surface grows while
+        // nothing is being presented, so MoltenVK never reports the swapchain
+        // out of date and libplacebo never rebuilds it. While playing, the
+        // next presented frame does that on its own, so recreating the mpv
+        // context would only cost the user a visible pause. Only a loaded,
+        // playing file qualifies: mpv reports `pause=no` while idle, so
+        // `isPlaying` alone would suppress the reload with nothing on screen.
+        if player.isFileLoaded, player.isPlaying {
+            scalingLogger.info("requestReloadForSurfaceChange: \(reason) — playing, next frame rebuilds the swapchain")
+            return
+        }
         scalingLogger.info("requestReloadForSurfaceChange: \(reason) — posting .reloadPlayer to recreate mpv at current surface size")
         NotificationCenter.default.post(.reloadPlayer)
     }

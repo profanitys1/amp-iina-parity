@@ -1788,7 +1788,7 @@ final class CompareSessionController: ObservableObject {
 
     func reload(primary: PlayerController) {
         guard isActive else {
-            primary.preparePlayback(startTime: primary.currentPlaybackTime, resetAudioSelection: false)
+            primary.reloadPreservingPlaybackState()
             return
         }
         let wasPlaying = primary.isPlaying
