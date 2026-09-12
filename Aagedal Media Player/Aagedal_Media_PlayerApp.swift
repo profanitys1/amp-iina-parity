@@ -357,14 +357,51 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             || NSClassFromString("XCTestCase") != nil
     }
 
+    /// Set when the app was launched by opening a file, so the welcome window
+    /// stays out of the way — IINA gates on the same condition in
+    /// `checkForShowingInitialWindow`.
+    private var didOpenFileOnLaunch = false
+
+    /// The welcome window, created on demand and kept for the app's lifetime.
+    private lazy var initialWindowController = InitialWindowController()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppSettings.registerDefaults()
         UpdateChecker.shared.checkIfNeeded()
         SparkleUpdater.shared.presentFirstLaunchNoticeIfNeeded()
+        WelcomeWindowPresenter.shared.present = { [weak self] in self?.showWelcomeWindow() }
+        WelcomeWindowPresenter.shared.dismiss = { [weak self] in
+            guard let self, self.initialWindowController.loaded else { return }
+            self.initialWindowController.close()
+        }
+        // IINA gates this on openFileCalled in checkForShowingInitialWindow.
+        if !didOpenFileOnLaunch {
+            showWelcomeWindow()
+        }
+    }
+
+    private func showWelcomeWindow() {
+        guard !isHostingUnitTests else { return }
+        WindowManager.shared.welcomeWindowOwnsLaunch = true
+        if initialWindowController.loaded {
+            initialWindowController.reloadData()
+        }
+        initialWindowController.showWindow(nil)
+        NSApp.activate()
     }
 
     func application(_ application: NSApplication, open urls: [URL]) {
+        didOpenFileOnLaunch = true
+        WelcomeWindowPresenter.shared.dismiss?()
         WindowManager.shared.open(urls)
+    }
+
+    /// Clicking the dock icon with nothing open brings the welcome window back,
+    /// matching IINA's `applicationShouldHandleReopen`.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        guard !flag, !isHostingUnitTests else { return true }
+        showWelcomeWindow()
+        return true
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -374,6 +411,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Closing the host window must not end the suite either.
-        !isHostingUnitTests
+        guard !isHostingUnitTests else { return false }
+        return UserDefaults.standard.value(for: AppSettings.quitWhenNoOpenedWindow)
     }
 }

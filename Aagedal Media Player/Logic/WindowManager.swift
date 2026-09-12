@@ -32,6 +32,12 @@ final class WindowManager: ObservableObject {
     /// Finder open on launch. Prevents duplicate spawning from later windows.
     var pendingWindowsSpawned = false
 
+    /// True while the welcome window is standing in as the app's launch UI.
+    /// SwiftUI's WindowGroup creates a window at launch whether or not there is
+    /// anything to play; while this is set, that empty window is rejected so the
+    /// welcome window is the only thing on screen.
+    var welcomeWindowOwnsLaunch = false
+
     /// True while the app is processing a file-open event from Finder/dock.
     /// Used by ContentView to auto-close windows that remain empty while
     /// other windows successfully loaded media.
@@ -81,6 +87,7 @@ final class WindowManager: ObservableObject {
     /// and in-app drag and drop.
     func open(_ urls: [URL]) {
         guard !urls.isEmpty else { return }
+        welcomeWindowOwnsLaunch = false
         fileOpenInProgress = true
 
         if allowMultipleWindows {
@@ -112,6 +119,25 @@ final class WindowManager: ObservableObject {
             pendingFileURLs = [urls[0]]
         }
 
+        NSApp.activate()
+    }
+
+    /// Opens one file in a fresh player window. Used by the welcome window,
+    /// which has no player of its own: the new scene consumes the queued URL in
+    /// `PlayerWindowCoordinator.consumePendingFile`.
+    func openInNewPlayerWindow(_ url: URL) {
+        welcomeWindowOwnsLaunch = false
+        fileOpenInProgress = true
+        if let window = windows.values.compactMap(\.window).first, !allowMultipleWindows {
+            window.makeKeyAndOrderFront(nil)
+            NotificationCenter.default.post(.openFile(url, targetWindow: window))
+        } else if let openNewWindow {
+            windowsToAllow += 1
+            pendingFileURLs.append(url)
+            openNewWindow()
+        } else {
+            pendingFileURLs.append(url)
+        }
         NSApp.activate()
     }
 

@@ -55,6 +55,14 @@ final class PlayerWindowCoordinator: ObservableObject {
         }
 
         let manager = WindowManager.shared
+        if manager.welcomeWindowOwnsLaunch,
+           manager.pendingFileURLs.isEmpty,
+           manager.windowsToAllow <= 0 {
+            // Nothing to play: the welcome window is the launch UI.
+            candidate.orderOut(nil)
+            DispatchQueue.main.async { candidate.close() }
+            return false
+        }
         if manager.hasWindows && manager.windowsToAllow <= 0 {
             candidate.orderOut(nil)
             DispatchQueue.main.async {
@@ -132,6 +140,18 @@ final class PlayerWindowCoordinator: ObservableObject {
         }
     }
 
+    /// Same panel, without needing a coordinator — the welcome window has no
+    /// player of its own yet.
+    static func presentOpenPanel() -> URL? {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = Self.supportedMediaTypes
+        guard panel.runModal() == .OK else { return nil }
+        return panel.url
+    }
+
     func openFilePanel(onSelection: (URL) -> Void) {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
@@ -150,6 +170,9 @@ final class PlayerWindowCoordinator: ObservableObject {
         onMetadataLoaded: @escaping () -> Void
     ) {
         logger.info("Opening file: \(url.lastPathComponent)")
+        // A player window now owns the screen; IINA closes its initial window
+        // at the same point, in PlayerCore.load.
+        WelcomeWindowPresenter.shared.dismiss?()
         fileOpenTask?.cancel()
         refreshFolderNavigation(for: url)
 

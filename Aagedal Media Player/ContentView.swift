@@ -143,7 +143,11 @@ struct ContentView: View {
                         timecodeActivationTrigger: $timecodeActivationTrigger
                     )
                 } else {
-                    DropZoneView(isDropTargeted: isDropTargeted, onOpenFile: openFilePanel)
+                    DropZoneView(
+                        isDropTargeted: isDropTargeted,
+                        onOpenFile: openFilePanel,
+                        onOpenRecent: openFile(url:)
+                    )
                 }
 
                 if loupe.isEnabled, controller.mediaItem?.presentationKind != .audioOnly, isMediaLoaded {
