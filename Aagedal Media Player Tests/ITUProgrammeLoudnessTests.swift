@@ -12,9 +12,7 @@ final class ITUProgrammeLoudnessTests: XCTestCase {
     /// The official programme audio remains outside the repository. Set the
     /// directory explicitly to run these independent, whole-file references.
     func testOfficialProgrammeReferencesWhenRequested() async throws {
-        guard let directory = ProcessInfo.processInfo.environment["ITU_LOUDNESS_REFERENCE_DIRECTORY"] else { return }
-        XCTAssertFalse(directory.isEmpty, "Specify the directory containing all three official WAV files")
-        guard !directory.isEmpty else { return }
+        let directory = try OptionalInput.require("ITU_LOUDNESS_REFERENCE_DIRECTORY")
         // ITU-R BS.2217-2, programme rows on printed pages 4–5: -23 ±0.1 LKFS.
         // https://www.itu.int/dms_pub/itu-r/opb/rep/R-REP-BS.2217-2-2016-PDF-E.pdf
         // Archive downloads: https://www.itu.int/oth/R1102000001/en

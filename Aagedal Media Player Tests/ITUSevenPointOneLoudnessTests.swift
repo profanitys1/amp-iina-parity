@@ -10,9 +10,7 @@ import XCTest
 @MainActor
 final class ITUSevenPointOneLoudnessTests: XCTestCase {
     func testOfficialEightChannelReferenceWhenRequested() async throws {
-        guard let directory = ProcessInfo.processInfo.environment["ITU_7_1_REFERENCE_DIRECTORY"] else { return }
-        XCTAssertFalse(directory.isEmpty)
-        guard !directory.isEmpty else { return }
+        let directory = try OptionalInput.require("ITU_7_1_REFERENCE_DIRECTORY")
         let file = "1770Conf-23LKFS-8channel.wav"
         let original = try Data(contentsOf: URL(fileURLWithPath: directory).appendingPathComponent(file))
         let sourceHash = digest(original)

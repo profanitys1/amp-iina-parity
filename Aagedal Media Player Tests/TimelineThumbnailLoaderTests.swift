@@ -13,7 +13,7 @@ final class TimelineThumbnailLoaderTests: XCTestCase {
     /// Opt-in production-decoder profile. The script provides explicit files;
     /// ordinary regression runs do not depend on long-form profiling media.
     func testProductionThumbnailProfileWhenRequested() async throws {
-        guard let input = ProcessInfo.processInfo.environment["TIMELINE_PROFILE_INPUTS"] else { return }
+        let input = try OptionalInput.require("TIMELINE_PROFILE_INPUTS")
         let paths = try JSONDecoder().decode([String].self, from: Data(input.utf8))
         XCTAssertFalse(paths.isEmpty)
         for path in paths {
