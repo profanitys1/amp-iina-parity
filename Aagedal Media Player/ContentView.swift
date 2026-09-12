@@ -293,13 +293,7 @@ struct ContentView: View {
                     )
                 case .metadata:
                     if let item = controller.mediaItem {
-                        MetadataInspectorView(
-                            item: item,
-                            useMPV: controller.useMPV,
-                            trimIn: controller.trimIn,
-                            trimOut: controller.trimOut,
-                            isPresented: $showInspector
-                        )
+                        metadataInspector(item: item)
                     }
                 }
             }
@@ -470,6 +464,17 @@ struct ContentView: View {
         .shadow(color: .black.opacity(0.35), radius: 12, y: 4)
         .padding(.horizontal, 12)
         .padding(.bottom, 12)
+    }
+
+    private func metadataInspector(item: MediaItem) -> some View {
+        MetadataInspectorView(
+            item: item,
+            useMPV: controller.useMPV,
+            trimIn: controller.trimIn,
+            trimOut: controller.trimOut,
+            activeHardwareDecoder: controller.activeHardwareDecoder,
+            isPresented: $showInspector
+        )
     }
 
     // MARK: - Scope Overlay

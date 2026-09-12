@@ -12,6 +12,7 @@ struct MetadataInspectorView: View {
     let useMPV: Bool
     let trimIn: Double?
     let trimOut: Double?
+    let activeHardwareDecoder: String?
     @Binding var isPresented: Bool
     @State private var showCopiedConfirmation = false
     @State private var copiedConfirmationTask = DeferredMainActorTask()
@@ -26,6 +27,10 @@ struct MetadataInspectorView: View {
     private var video: MediaMetadata.VideoStream? { metadata?.videoStreams.first }
     private var audio: MediaMetadata.AudioStream? { metadata?.audioStreams.first }
 
+    private var decoderStatus: HardwareDecodingStatus {
+        HardwareDecodingStatus(mpvValue: activeHardwareDecoder)
+    }
+
     var body: some View {
         List {
             if let metadata = metadata {
@@ -36,6 +41,10 @@ struct MetadataInspectorView: View {
                         metadataRow("Duration", value: formatDuration(duration))
                     }
                     metadataRow("Size", value: item.formattedSize)
+                }
+
+                Section("Decoding") {
+                    metadataRow("Video decoder", value: decoderStatus.label)
                 }
 
                 // Container

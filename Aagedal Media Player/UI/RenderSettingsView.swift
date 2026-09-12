@@ -18,8 +18,6 @@ struct RenderSettingsView: View {
     @AppStorage(AppSettings.autoSelectSubtitles.key)
     private var autoSelectSubtitles = AppSettings.autoSelectSubtitles.defaultValue
 
-    @State private var decoderStatus = HardwareDecodingStatus.unavailable
-
     private var profile: RenderProfile {
         RenderProfile(rawValue: renderProfileRaw) ?? .off
     }
@@ -94,23 +92,8 @@ struct RenderSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-
-            Section("Decoding") {
-                LabeledContent("Video decoder") {
-                    Text(decoderStatus.label)
-                        .foregroundStyle(decoderStatus.isHardwareBacked ? .primary : .secondary)
-                }
-
-                Text("Reported by mpv for the file that is playing. A codec VideoToolbox cannot decode falls back to software, which shows here as Software decoding.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
         .formStyle(.grouped)
-        .onReceive(NotificationCenter.default.appCommandPublisher) { notification in
-            guard case .hardwareDecoderChanged(let value) = notification.appCommand else { return }
-            decoderStatus = HardwareDecodingStatus(mpvValue: value)
-        }
     }
 
     private func chooseDirectory() {

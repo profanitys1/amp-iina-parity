@@ -754,7 +754,6 @@ final class PlayerController: ObservableObject {
                           player: self.mpvPlayer
                       ) else { return }
                 self.activeHardwareDecoder = decoder
-                NotificationCenter.default.post(.hardwareDecoderChanged(decoder ?? ""))
             }
 
         // Refresh audio tracks after MPV parses the media
@@ -1661,7 +1660,6 @@ final class PlayerController: ObservableObject {
         mpvSigPeakCancellable = nil
         mpvDecoderCancellable = nil
         activeHardwareDecoder = nil
-        NotificationCenter.default.post(.hardwareDecoderChanged(""))
         mpvIsPlayingCancellable = nil
         mpvBackwardFailureCancellable = nil
         mpvErrorCancellable = nil
