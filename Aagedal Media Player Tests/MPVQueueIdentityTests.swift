@@ -13,15 +13,18 @@ final class MPVQueueIdentityTests: XCTestCase {
         let player = MPVPlayer()
         XCTAssertFalse(player.isRunningOnMPVQueue)
 
-        var observed = true
+        var observed = false
         player.withMPVQueueForTesting {
             observed = player.isRunningOnMPVQueue
         }
         XCTAssertTrue(observed)
     }
 
-    /// A player with no mpv context must deallocate cleanly; this is the case
-    /// a naive queue.sync teardown would deadlock on if run on the queue.
+    /// A player that never had an mpv context must deallocate cleanly, with no
+    /// queue involved. This does not cover the on-queue teardown path: an
+    /// object holding a live context cannot deallocate at all, because
+    /// `wakeupContext` is a +1 on self released only by `destroy()` or by the
+    /// deinit itself.
     func testReleaseWithoutContextDoesNotCrash() {
         var player: MPVPlayer? = MPVPlayer()
         XCTAssertNotNil(player)

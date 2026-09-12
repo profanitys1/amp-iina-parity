@@ -124,6 +124,10 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
 
     deinit {
         // Safety net — destroy() should have been called already.
+        // Unreachable while the Unmanaged self-retain holds: wakeupContext is a
+        // +1 on self (setupMPV), released only by destroy() or by this deinit,
+        // so an object with a live context cannot deallocate. Kept as a safety
+        // net for the case where that retain scheme changes.
         if let context = mpv {
             mpv_set_wakeup_callback(context, nil, nil)
             // Destroy on the same queue the event loop runs on, or mpv can be
