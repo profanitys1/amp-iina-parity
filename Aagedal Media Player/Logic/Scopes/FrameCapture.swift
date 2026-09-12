@@ -10,6 +10,7 @@ import AppKit
 import Combine
 import OSLog
 import VideoToolbox
+import os
 
 /// Identifies one scope-capture session and the MPV backend that supplied a
 /// frame. A screenshot request cannot be cancelled once it has entered mpv's
@@ -144,7 +145,7 @@ final class FrameCapture: ObservableObject {
     private var mpvCaptureInFlight: ScopeCaptureIdentity?
     private var sampleSequence: UInt64 = 0
     private var sampleHistory = ScopeFrameHistory()
-    private nonisolated(unsafe) static var hdrFormatLogged = false
+    private nonisolated static let hdrFormatLogged = OneShotFlag()
 
     // Shared timer
     private var captureTimer: Timer?
@@ -244,7 +245,7 @@ final class FrameCapture: ObservableObject {
         captureTimer?.invalidate()
         captureTimer = nil
         clearCapturedSamples()
-        Self.hdrFormatLogged = false
+        Self.hdrFormatLogged.reset()
 
         // Remove video output so it doesn't interfere with playback pipeline
         let hadOutput = videoOutput != nil || hdrVideoOutput != nil
@@ -627,8 +628,7 @@ final class FrameCapture: ObservableObject {
         guard srcW > 0, srcH > 0 else { return nil }
 
         // One-shot diagnostic: log format and sample pixel values on first HDR capture
-        if !Self.hdrFormatLogged {
-            Self.hdrFormatLogged = true
+        if Self.hdrFormatLogged.claim() {
             // Sample center pixel to verify value range
             let cx = srcW / 2, cy = srcH / 2
             var sampleR: Float = 0, sampleG: Float = 0, sampleB: Float = 0
