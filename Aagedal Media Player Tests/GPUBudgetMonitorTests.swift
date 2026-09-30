@@ -10,6 +10,16 @@ struct GPUBudgetMonitorTests {
         #expect(timing.minimumSampleCount == 7)
     }
 
+    // With FSRCNNX_x2_16 loaded, mpv 0.41 never samples the final output pass:
+    // it stays at count 0 while the 29 shader passes reach 256 (measured on
+    // gaia.mov, 2026-09-30). An unsampled pass must not hold warm-up forever.
+    @Test func ignoresPassesMpvNeverSamples() throws {
+        let json = #"{"fresh":[{"desc":"feature map 1","last":150000,"avg":177000,"peak":400000,"count":256,"samples":[]},{"desc":"aggregation","last":250000,"avg":251000,"peak":300000,"count":256,"samples":[]},{"desc":"ortho (horiz) upscaling (lanczos), color encoding","last":0,"avg":0,"peak":0,"count":0,"samples":[]}],"redraw":[]}"#
+        let timing = try #require(VOPassTiming(json: json))
+        #expect(timing.minimumSampleCount == 256)
+        #expect(abs(timing.totalMilliseconds - 0.428) < 1e-9)
+    }
+
     @Test(arguments: [#"{"fresh":[],"redraw":[]}"#, "fresh:\n", ""])
     func rejectsEmptyOrNonJSONPasses(json: String) {
         #expect(VOPassTiming(json: json) == nil)

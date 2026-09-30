@@ -17,13 +17,18 @@ nonisolated struct VOPassTiming: Equatable, Sendable {
 nonisolated extension VOPassTiming {
     /// Parses `vo-passes` read as a string. mpv prints node properties with
     /// `json_write`, and every time is in nanoseconds.
+    ///
+    /// Passes with no samples at all are left out. With some shader stacks
+    /// (FSRCNNX_x2_16) mpv 0.41 never samples the final output pass, and
+    /// counting it would hold the warm-up gate shut for the whole file.
     init?(json: String) {
         struct Pass: Decodable { let avg: Int64; let count: Int64 }
         struct Passes: Decodable { let fresh: [Pass] }
-        guard let passes = try? JSONDecoder().decode(Passes.self, from: Data(json.utf8)),
-              let fewest = passes.fresh.map(\.count).min() else { return nil }
+        guard let passes = try? JSONDecoder().decode(Passes.self, from: Data(json.utf8)) else { return nil }
+        let sampled = passes.fresh.filter { $0.count > 0 }
+        guard let fewest = sampled.map(\.count).min() else { return nil }
         self.init(
-            totalMilliseconds: Double(passes.fresh.reduce(0) { $0 + $1.avg }) / 1_000_000,
+            totalMilliseconds: Double(sampled.reduce(0) { $0 + $1.avg }) / 1_000_000,
             minimumSampleCount: Int(fewest)
         )
     }

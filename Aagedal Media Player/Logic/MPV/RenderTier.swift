@@ -6,19 +6,22 @@ import CoreGraphics
 
 /// One rung of the automatic enhancement ladder, lightest first.
 ///
-/// Used only while Enhance is on and the manual profile is Faithful. Costs
-/// below were measured on an M1 Pro, 720p fullscreen (2.69x), 24 fps source:
-/// SSimSuperRes 10.1 ms, RAVU zoom 9.3 ms, ArtCNN C4F16 12.0 ms, C4F32 28.2 ms
-/// per frame. The order follows image-quality intent, not cost. The GPU
-/// budget monitor corrects for cost at runtime.
+/// Used only while Enhance is on and the manual profile is Faithful. Measured
+/// on an M1 Pro with gaia.mov (1280x720p30 ProRes), fullscreen at 2.69x, and
+/// scored by 2x reconstruction (PSNR-Y / SSIM against the 720p master):
+/// SSimSuperRes 11.2 ms, 41.46 dB / 0.99891; RAVU zoom 10.7 ms (not scorable
+/// offline); ArtCNN C4F16 13.7 ms, 43.15 dB / 0.99940; FSRCNNX 16 about 16 ms,
+/// 44.60 dB / 0.99956. ArtCNN C4F32 was dropped: 39.1 ms for no gain over
+/// C4F16 (43.17 dB / 0.99939). The GPU budget monitor corrects for cost at
+/// runtime.
 nonisolated enum RenderTier: Int, CaseIterable, Comparable, Sendable {
     case faithful
     case sharpen
     case ravuZoom
     case artcnnLight
-    case artcnnStrong
+    case fsrcnnx
 
-    /// ArtCNN always emits exactly 2x. Below this ratio the overshoot would be
+    /// ArtCNN and FSRCNNX always emit exactly 2x. Below this ratio the overshoot would be
     /// thrown away again by `dscale`, which costs GPU time for nothing.
     static let neuralDoublerMinimumRatio = 1.9
 
@@ -30,7 +33,7 @@ nonisolated enum RenderTier: Int, CaseIterable, Comparable, Sendable {
         case .sharpen: "Sharpened"
         case .ravuZoom: "RAVU zoom"
         case .artcnnLight: "ArtCNN light"
-        case .artcnnStrong: "ArtCNN strong"
+        case .fsrcnnx: "FSRCNNX"
         }
     }
 
@@ -40,7 +43,7 @@ nonisolated enum RenderTier: Int, CaseIterable, Comparable, Sendable {
         case .sharpen: RenderProfile.sharpen.shaderFileNames
         case .ravuZoom: ["ravu-zoom-ar-r3.hook"]
         case .artcnnLight: ["ArtCNN_C4F16.glsl"]
-        case .artcnnStrong: ["ArtCNN_C4F32.glsl"]
+        case .fsrcnnx: ["FSRCNNX_x2_16-0-4-1.glsl"]
         }
     }
 
@@ -54,7 +57,7 @@ nonisolated enum RenderTier: Int, CaseIterable, Comparable, Sendable {
         switch self {
         case .faithful: true
         case .sharpen, .ravuZoom: ratio > 1.0
-        case .artcnnLight, .artcnnStrong: ratio >= Self.neuralDoublerMinimumRatio
+        case .artcnnLight, .fsrcnnx: ratio >= Self.neuralDoublerMinimumRatio
         }
     }
 

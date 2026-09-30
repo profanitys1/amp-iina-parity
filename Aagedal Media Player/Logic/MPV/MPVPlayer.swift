@@ -958,7 +958,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                         self.lastReversalBufferRaise = nil
                         self.isFileLoaded = true
                         // A new file gets the whole ladder back. Broken tiers stay excluded.
-                        self.tierFloor = .artcnnStrong
+                        self.tierFloor = .fsrcnnx
                         self.reselectTier()
                         if self.pendingSeekAfterLoad > 0 {
                             self.seek(to: self.pendingSeekAfterLoad)
@@ -1146,7 +1146,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     @Published private(set) var isTierSteppedDown = false
 
     /// The heaviest tier allowed after GPU step-downs. Reset for each file.
-    private var tierFloor: RenderTier = .artcnnStrong
+    private var tierFloor: RenderTier = .fsrcnnx
     /// Tiers whose shaders libplacebo rejected. Kept for this player's lifetime.
     private var brokenTiers: Set<RenderTier> = []
     private var drawableSize: CGSize = .zero
@@ -1297,7 +1297,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                 !brokenTiers.contains(tier) && library.missingShaderNames(named: tier.shaderFileNames).isEmpty
             })
             target = TierSelector.select(ratio: ratio, available: available, floor: tierFloor)
-            steppedDown = target < TierSelector.select(ratio: ratio, available: available, floor: .artcnnStrong)
+            steppedDown = target < TierSelector.select(ratio: ratio, available: available, floor: .fsrcnnx)
         }
         isTierSteppedDown = steppedDown
         guard target != activeTier else { return }

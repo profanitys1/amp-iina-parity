@@ -11,12 +11,12 @@ struct RenderTierTests {
         (1.0, .faithful),
         (1.2, .ravuZoom),
         (1.57, .ravuZoom),
-        (1.9, .artcnnStrong),
-        (2.0, .artcnnStrong),
-        (3.0, .artcnnStrong),
+        (1.9, .fsrcnnx),
+        (2.0, .fsrcnnx),
+        (3.0, .fsrcnnx),
     ])
     func picksTheHeaviestTierTheRatioAllows(ratio: Double, expected: RenderTier) {
-        #expect(TierSelector.select(ratio: ratio, available: Self.everyTier, floor: .artcnnStrong) == expected)
+        #expect(TierSelector.select(ratio: ratio, available: Self.everyTier, floor: .fsrcnnx) == expected)
     }
 
     @Test(arguments: [
@@ -32,13 +32,13 @@ struct RenderTierTests {
     }
 
     @Test func skipsTiersWhoseShadersAreMissing() {
-        let withoutArtCNN: Set<RenderTier> = [.faithful, .sharpen, .ravuZoom]
-        #expect(TierSelector.select(ratio: 2.0, available: withoutArtCNN, floor: .artcnnStrong) == .ravuZoom)
+        let withoutNeuralDoublers: Set<RenderTier> = [.faithful, .sharpen, .ravuZoom]
+        #expect(TierSelector.select(ratio: 2.0, available: withoutNeuralDoublers, floor: .fsrcnnx) == .ravuZoom)
 
-        let withoutRAVU: Set<RenderTier> = [.faithful, .sharpen, .artcnnLight, .artcnnStrong]
-        #expect(TierSelector.select(ratio: 1.2, available: withoutRAVU, floor: .artcnnStrong) == .sharpen)
+        let withoutRAVU: Set<RenderTier> = [.faithful, .sharpen, .artcnnLight, .fsrcnnx]
+        #expect(TierSelector.select(ratio: 1.2, available: withoutRAVU, floor: .fsrcnnx) == .sharpen)
 
-        #expect(TierSelector.select(ratio: 2.0, available: [], floor: .artcnnStrong) == .faithful)
+        #expect(TierSelector.select(ratio: 2.0, available: [], floor: .fsrcnnx) == .faithful)
     }
 
     @Test func ratioIsTheTighterAxis() throws {
@@ -56,7 +56,7 @@ struct RenderTierTests {
     }
 
     @Test func stepsDownOneRungAndStopsAtFaithful() {
-        #expect(RenderTier.artcnnStrong.steppedDown == .artcnnLight)
+        #expect(RenderTier.fsrcnnx.steppedDown == .artcnnLight)
         #expect(RenderTier.sharpen.steppedDown == .faithful)
         #expect(RenderTier.faithful.steppedDown == .faithful)
     }
