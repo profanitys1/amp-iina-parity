@@ -10,6 +10,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @StateObject private var controller = PlayerController()
     @StateObject private var compareSession = CompareSessionController()
     @StateObject private var windowCoordinator = PlayerWindowCoordinator()
@@ -438,7 +439,11 @@ struct ContentView: View {
         }
         .scrollContentBackground(.hidden)
         .frame(width: 340)
-        .glassEffect(.clear.tint(.black.opacity(0.5)), in: .rect(cornerRadius: 18))
+        .background(
+            RoundedRectangle(cornerRadius: 18)
+                .fill(reduceTransparency ? Color.black.opacity(0.85) : Color.clear)
+        )
+        .modifier(GlassPanelModifier(reduceTransparency: reduceTransparency))
     }
 
     // MARK: - Overlay Controls
@@ -674,4 +679,18 @@ struct ContentView: View {
         )
     }
 
+}
+
+/// Conditionally applies the Liquid Glass effect or a solid background based
+/// on the Reduce Transparency accessibility setting.
+private struct GlassPanelModifier: ViewModifier {
+    let reduceTransparency: Bool
+
+    func body(content: Content) -> some View {
+        if reduceTransparency {
+            content
+        } else {
+            content.glassEffect(.clear.tint(.black.opacity(0.5)), in: .rect(cornerRadius: 18))
+        }
+    }
 }
