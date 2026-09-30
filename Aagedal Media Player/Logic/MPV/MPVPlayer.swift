@@ -287,7 +287,13 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         #if DEBUG
         checkError(mpv_request_log_messages(mpv, "warn"))
         #else
-        checkError(mpv_request_log_messages(mpv, "no"))
+        // Errors must survive a release build. libplacebo reports a failed user
+        // shader at error level and then silently disables the hook, so a neural
+        // upscaler that never dispatched renders an un-upscaled picture with no
+        // other symptom. It also logs "Failed mapping filter function …, no
+        // libplacebo analog?" when a scaler name falls back to bilinear — four
+        // names in mpv's list do, including `ewa_lanczossoft` and `haasnsoft`.
+        checkError(mpv_request_log_messages(mpv, "error"))
         #endif
 
         var wid = unsafeBitCast(metalLayer, to: Int64.self)
@@ -303,8 +309,13 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             checkError(mpv_set_option_string(mpv, "vf", "lavfi=[vflip]"), context: "display reflection")
         }
 
-        checkError(mpv_set_option_string(mpv, "framedrop", "decoder+vo"), context: "framedrop")
+        // Decoder-side dropping discards frames the inspector never shows and
+        // never counts, and mpv documents `decoder` as "Not recommended". `vo`
+        // is mpv's own recommended default: every frame is still decoded and
+        // filtered, only the presentation of an already-late frame is skipped.
+        checkError(mpv_set_option_string(mpv, "framedrop", "vo"), context: "framedrop")
 
+        applyScalerOptions()
         applyRenderProfileOption()
 
         checkError(mpv_set_option_string(mpv, "target-colorspace-hint", "yes"), context: "target-colorspace-hint")
@@ -902,6 +913,12 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                         let level = msg.pointee.level.map { String(cString: $0) } ?? "?"
                         let text = msg.pointee.text.map { String(cString: $0) } ?? ""
                         print("[\(prefix)] \(level): \(text)", terminator: "")
+                        // `print` goes to stdout, which a shipped .app has nowhere
+                        // to put it. Mirror error level into OSLog so a disabled
+                        // shader hook is findable in Console.app after the fact.
+                        if level == "error" || level == "fatal" {
+                            self.logger.error("[mpv/\(prefix, privacy: .public)] \(text, privacy: .public)")
+                        }
                         // mpv's backward-playback algorithm prints this exact
                         // string when it gives up. Signal subscribers so they
                         // can fall back to a different reverse strategy.
@@ -1112,6 +1129,53 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         ShaderLibrary(directoryPath: UserDefaults.standard.value(for: AppSettings.shaderDirectory))
     }
 
+    /// Sets the scaler options that libmpv's defaults get wrong for this app.
+    ///
+    /// Only `dscale` and `cscale` are changed here; `scale` and
+    /// `scaler-resizes-only` follow the render profile (see
+    /// `RenderProfile.scaleOptions`). Everything else is deliberately left at mpv's
+    /// default, and the defaults are not what most guides claim — they were
+    /// measured against the bundled mpv 0.41.0 / libplacebo 7.360.1:
+    ///
+    /// - `scale=lanczos` is already the fidelity-correct choice. The popular
+    ///   `ewa_lanczossharp` is `ewa_lanczos` with `.blur = 0.98125` — a
+    ///   deliberate 1.9% kernel narrowing. It is a sharpening bias, so it
+    ///   measures *worse* than plain lanczos (PSNR 36.07 vs 36.51 at 2x) and
+    ///   costs 7.56 ms/frame against 5.98 ms. Wrong for an inspector.
+    /// - `scale-antiring=0` stays. Antiringing only removes overshoot a sharp
+    ///   filter introduced, so it has nothing to correct on top of lanczos, and
+    ///   MS-SSIM degrades as the strength rises. It becomes worth setting only
+    ///   if `scale` is switched to a sharpened preset.
+    /// - `correct-downscaling`, `linear-downscaling` and `sigmoid-upscaling` are
+    ///   all already `yes`. Do not turn `linear-downscaling` off: mpv computes
+    ///   `disable_linear_scaling = !linear_downscaling && !linear_upscaling` and
+    ///   `linear-upscaling` defaults to `no`, so that single change silently
+    ///   disables sigmoid upscaling too.
+    /// - `dither-depth=auto` already resolves to a 10-bit `bgr10a2Unorm` layer on
+    ///   macOS and `dither=fruit` already maps to blue noise. `temporal-dither`
+    ///   stays off — libplacebo's own header notes it "commonly flickers on
+    ///   LCDs", and a crawling still frame is worse than useless here.
+    ///
+    /// `dscale` is the one real defect: libplacebo defaults it to `hermite`, a
+    /// radius-1 filter the mpv manual calls "prone to blocking". This app
+    /// downscales constantly — Compare Mode panels, windows clamped to the
+    /// screen, and, least obviously, the residual pass whenever a fixed-2x
+    /// neural shader overshoots a non-integer target. A 1080p source fullscreen
+    /// on a 14" MacBook Pro is 1.57x, so such a shader emits 3840x2160 and
+    /// `dscale` decides the final picture while `scale` is never used at all.
+    /// Mitchell is radius 2.0 and, with `correct-downscaling` widening the kernel
+    /// by the inverse ratio, gets roughly twice hermite's effective support.
+    ///
+    /// `cscale` is pinned to `spline36` rather than inheriting `scale`, so the
+    /// sharpened `.sharpen` profile never sharpens chroma too. Whenever a
+    /// chroma shader (CfL) is loaded it resizes the plane itself and `cscale`
+    /// does not run at all; if the shader file is missing, spline36 is a sound
+    /// fallback where the `bilinear` some guides pair with CfL would not be.
+    private func applyScalerOptions() {
+        checkError(mpv_set_option_string(mpv, "dscale", "mitchell"), context: "dscale")
+        checkError(mpv_set_option_string(mpv, "cscale", "spline36"), context: "cscale")
+    }
+
     /// Reads the stored profile and sets it as an mpv option. Only valid
     /// before `mpv_initialize` — use `setRenderProfile` afterwards.
     private func applyRenderProfileOption() {
@@ -1130,6 +1194,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             checkError(mpv_set_option_string(mpv, "glsl-shaders", value), context: "glsl-shaders")
         }
         checkError(mpv_set_option_string(mpv, "deband", profile.enablesDeband ? "yes" : "no"), context: "deband")
+        for (name, value) in profile.scaleOptions {
+            checkError(mpv_set_option_string(mpv, name, value), context: name)
+        }
     }
 
     /// Switches the shader stack on a running player.
@@ -1147,6 +1214,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             command("change-list", args: ["glsl-shaders", "append", path])
         }
         setFlag("deband", profile.enablesDeband)
+        for (name, value) in profile.scaleOptions {
+            setString(name, value)
+        }
     }
 
     /// Attaches an external subtitle file to the current media and selects it.

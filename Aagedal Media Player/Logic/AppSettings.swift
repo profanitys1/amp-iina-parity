@@ -57,7 +57,7 @@ nonisolated enum AppSettings {
     static let demuxerReadaheadSeconds = AppSetting(key: "demuxerReadaheadSeconds", defaultValue: 0.0)
 
     // Rendering
-    static let renderProfile = AppSetting(key: "renderProfile", defaultValue: RenderProfile.chroma.rawValue)
+    static let renderProfile = AppSetting(key: "renderProfile", defaultValue: RenderProfile.off.rawValue)
     static let shaderDirectory = AppSetting(key: "shaderDirectory", defaultValue: "")
 
     // Control bar

@@ -62,6 +62,24 @@ final class RenderProfileTests: XCTestCase {
         XCTAssertTrue(library.directory.path.hasSuffix("/shaders"))
     }
 
+    func testOnlySharpenDepartsFromTheFaithfulScaler() {
+        for profile in RenderProfile.allCases {
+            let options = profile.scaleOptions
+            XCTAssertEqual(Set(options.keys), ["scale", "scaler-resizes-only"], "every profile must reset every key")
+            if profile == .sharpen {
+                XCTAssertEqual(options["scale"], "ewa_lanczossharp")
+                XCTAssertEqual(options["scaler-resizes-only"], "no")
+            } else {
+                XCTAssertEqual(options["scale"], "lanczos", "\(profile.rawValue)")
+                XCTAssertEqual(options["scaler-resizes-only"], "yes", "\(profile.rawValue)")
+            }
+        }
+    }
+
+    func testDefaultProfileIsFaithful() {
+        XCTAssertEqual(AppSettings.renderProfile.defaultValue, RenderProfile.off.rawValue)
+    }
+
     func testOnlyRestorationEnablesDeband() {
         for profile in RenderProfile.allCases {
             XCTAssertEqual(profile.enablesDeband, profile == .restore, "\(profile.rawValue)")

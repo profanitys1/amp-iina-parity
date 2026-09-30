@@ -13,6 +13,7 @@ import Foundation
 nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable {
     case off
     case chroma
+    case sharpen
     case upscaleLight
     case upscaleStrong
     case restore
@@ -21,8 +22,9 @@ nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable {
 
     var displayName: String {
         switch self {
-        case .off: "Off"
+        case .off: "Faithful"
         case .chroma: "Chroma reconstruction"
+        case .sharpen: "Sharpened upscale"
         case .upscaleLight: "Neural upscale — light"
         case .upscaleStrong: "Neural upscale — strong"
         case .restore: "Restoration"
@@ -31,8 +33,9 @@ nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable {
 
     var summary: String {
         switch self {
-        case .off: "No shaders. The plain gpu-next path."
-        case .chroma: "Reconstructs 4:2:0 chroma from luma. Cheap at any resolution."
+        case .off: "No shaders. Plain resampling that stays true to the source — use this for inspection."
+        case .chroma: "Infers 4:2:0 chroma edges from luma. Alters colour detail; cheap at any resolution."
+        case .sharpen: "Sharper scaler plus SSimSuperRes. Alters the image; adds ringing-free edge contrast."
         case .upscaleLight: "Neural luma upscaling for sub-4K sources, plus chroma reconstruction."
         case .upscaleStrong: "Larger upscaling network. Best for sub-1080p sources, on AC power."
         case .restore: "Denoise, upscale and regrain rough standard-definition sources."
@@ -46,6 +49,8 @@ nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable {
             []
         case .chroma:
             ["CfL_Prediction.glsl"]
+        case .sharpen:
+            ["SSimSuperRes.glsl"]
         case .upscaleLight:
             ["ArtCNN_C4F16.glsl", "CfL_Prediction.glsl"]
         case .upscaleStrong:
@@ -58,6 +63,21 @@ nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable {
     /// Debanding only pays for itself on the low-bitrate sources the
     /// restoration profile targets; elsewhere it costs contrast for nothing.
     var enablesDeband: Bool { self == .restore }
+
+    /// Main-scaler options that differ per profile. Every profile sets every
+    /// key, so switching never leaves a previous profile's value behind.
+    ///
+    /// Only `.sharpen` departs from mpv's defaults. SSimSuperRes is a
+    /// POSTKERNEL supplement to the scaler, so it is paired with the sharper
+    /// `ewa_lanczossharp`; antiringing stays 0 because the shader does its own.
+    /// `scaler-resizes-only=no` enables subpixel-offset correction, which the
+    /// shader needs because it samples against `NATIVE_CROPPED`. Neural
+    /// prescalers emit at or above target size, so `scale` barely runs for them.
+    var scaleOptions: [String: String] {
+        self == .sharpen
+            ? ["scale": "ewa_lanczossharp", "scaler-resizes-only": "no"]
+            : ["scale": "lanczos", "scaler-resizes-only": "yes"]
+    }
 }
 
 /// Resolves shader file names to on-disk paths mpv can load.
