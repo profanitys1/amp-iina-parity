@@ -960,6 +960,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                         // A new file gets the whole ladder back. Broken tiers stay excluded.
                         self.tierFloor = .fsrcnnx
                         self.reselectTier()
+                        self.refreshBudgetMonitor()
                         if self.pendingSeekAfterLoad > 0 {
                             self.seek(to: self.pendingSeekAfterLoad)
                             self.pendingSeekAfterLoad = 0
@@ -1308,9 +1309,14 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             scaleOptions: target.scaleOptions,
             deband: false
         )
-        budgetMonitor = GPUBudgetMonitor(sourceFPS: getDouble("container-fps"), displayFPS: displayRefreshRate)
+        refreshBudgetMonitor()
         logger.info("Render tier: \(target.displayName, privacy: .public) ratio=\(ratioText, privacy: .public) drawable=\(Int(self.drawableSize.width))x\(Int(self.drawableSize.height))")
         updateBudgetSampling()
+    }
+
+    /// A new budget for the current file: its frame rate and a clean drop history.
+    private func refreshBudgetMonitor() {
+        budgetMonitor = GPUBudgetMonitor(sourceFPS: getDouble("container-fps"), displayFPS: displayRefreshRate)
     }
 
     private func stepDownTier(reason: String) {
