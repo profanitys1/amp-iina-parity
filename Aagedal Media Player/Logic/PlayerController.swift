@@ -1684,7 +1684,7 @@ final class PlayerController: ObservableObject {
 
 // MARK: - Double Clamped Helper
 
-extension Double {
+nonisolated extension Double {
     func clamped(to range: ClosedRange<Double>, default defaultValue: Double) -> Double {
         let value = isFinite ? self : defaultValue
         return min(max(value, range.lowerBound), range.upperBound)

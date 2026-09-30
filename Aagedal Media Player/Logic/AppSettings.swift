@@ -159,7 +159,7 @@ nonisolated enum AppSettings {
     }
 }
 
-extension UserDefaults {
+nonisolated extension UserDefaults {
     func value<Value: Sendable>(for setting: AppSetting<Value>) -> Value {
         object(forKey: setting.key) as? Value ?? setting.defaultValue
     }

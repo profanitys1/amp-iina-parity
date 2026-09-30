@@ -431,7 +431,7 @@ nonisolated enum ComparisonStillFrameExtractor {
         return min(finiteTime, lastFrameTime)
     }
 
-    static func image(
+    @concurrent static func image(
         from url: URL, at time: TimeInterval, maximumSize: CGSize = .zero,
         tolerance: CMTime = .zero
     ) async throws -> CGImage {

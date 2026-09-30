@@ -211,7 +211,7 @@ struct MediaOperationFeedbackOverlay: View {
     }
 }
 
-private struct ProgressCapsuleBorder: Shape {
+nonisolated private struct ProgressCapsuleBorder: Shape {
     var progress: Double
 
     var animatableData: Double {
