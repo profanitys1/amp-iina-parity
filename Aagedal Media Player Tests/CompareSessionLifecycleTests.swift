@@ -443,11 +443,13 @@ final class CompareSessionLifecycleTests: XCTestCase {
 
     private func makeSession(
         loader: ControlledCompareMetadataLoader,
-        secondary: PlayerController = PlayerController(),
+        secondary: PlayerController? = nil,
         reviewStore: any CompareReviewSidecarStoring = CompareReviewSidecarStore.shared
     ) -> CompareSessionController {
+        // Default arguments are evaluated nonisolated, and `PlayerController.init`
+        // is main-actor isolated, so the fallback is built here instead.
         CompareSessionController(
-            secondaryController: secondary,
+            secondaryController: secondary ?? PlayerController(),
             reviewStore: reviewStore,
             metadataLoader: { url in
                 try await loader.load(url)
