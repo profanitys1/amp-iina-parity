@@ -205,6 +205,16 @@ struct ContentView: View {
                 )
             }
 
+            // Layer 3b: inspector, above the picture and below the controls
+            if showInspector {
+                inspectorPanel
+                    .padding(.top, 36)
+                    .padding(.trailing, 12)
+                    .padding(.bottom, 132)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+
             // Layer 4: overlay controls
             overlayControls
 
@@ -238,7 +248,7 @@ struct ContentView: View {
                 .allowsHitTesting(false)
             }
         }
-        .ignoresSafeArea(edges: .top)
+        .ignoresSafeArea()
         .focusedSceneValue(\.isMediaLoaded, isMediaLoaded)
         .focusedSceneValue(\.isCompareModeActive, compareSession.isActive)
         .focusedSceneValue(\.canOpenPreviousFile, windowCoordinator.canOpenPreviousFile)
@@ -271,45 +281,6 @@ struct ContentView: View {
                 hovering,
                 isControlInteractionActive: isControlInteractionActive
             )
-        }
-        .inspector(isPresented: $showInspector) {
-            VStack(spacing: 0) {
-                HStack(spacing: 8) {
-                    Picker("", selection: $inspectorTab) {
-                        ForEach(InspectorTab.allCases) { tab in
-                            Text(tab.title).tag(tab)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
-
-                    Button { showInspector = false } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Close inspector")
-                    .accessibilityLabel("Close inspector")
-                }
-                .padding(8)
-
-                Divider()
-
-                switch inspectorTab {
-                case .playlist:
-                    PlaylistSidebarView(
-                        urls: windowCoordinator.siblingMediaURLs,
-                        currentIndex: windowCoordinator.siblingMediaIndex,
-                        onSelect: { openFile(url: $0) }
-                    )
-                case .metadata:
-                    if let item = controller.mediaItem {
-                        metadataInspector(item: item)
-                    }
-                }
-            }
-            .inspectorColumnWidth(min: 280, ideal: 360, max: 480)
         }
         .onDrop(of: [.fileURL], isTargeted: $isDropTargeted) { providers in
             windowCoordinator.handleDrop(providers, controller: controller)
@@ -421,6 +392,53 @@ struct ContentView: View {
             )
             windowCoordinator.tearDown()
         }
+    }
+
+    // MARK: - Inspector
+
+    /// Playlist and metadata, floating over the picture as see-through
+    /// Liquid Glass. A native `.inspector` column sits beside the video in an
+    /// opaque split view, so it could never show the picture through it.
+    private var inspectorPanel: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Picker("", selection: $inspectorTab) {
+                    ForEach(InspectorTab.allCases) { tab in
+                        Text(tab.title).tag(tab)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+
+                Button { showInspector = false } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Close inspector")
+                .accessibilityLabel("Close inspector")
+            }
+            .padding(8)
+
+            Divider()
+
+            switch inspectorTab {
+            case .playlist:
+                PlaylistSidebarView(
+                    urls: windowCoordinator.siblingMediaURLs,
+                    currentIndex: windowCoordinator.siblingMediaIndex,
+                    onSelect: { openFile(url: $0) }
+                )
+            case .metadata:
+                if let item = controller.mediaItem {
+                    metadataInspector(item: item)
+                }
+            }
+        }
+        .scrollContentBackground(.hidden)
+        .frame(width: 340)
+        .glassEffect(.clear.tint(.black.opacity(0.5)), in: .rect(cornerRadius: 18))
     }
 
     // MARK: - Overlay Controls
