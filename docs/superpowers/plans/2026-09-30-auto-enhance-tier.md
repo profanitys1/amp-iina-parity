@@ -1655,6 +1655,99 @@ The user wants amp to use MLX and Metal, modified mpv and ffmpeg, and models fro
 - Liquid Glass API: `glassEffect(_:in:)` is macOS 26+. The panel uses `.glassEffect(.clear.tint(.black.opacity(0.5)), in: .rect(cornerRadius: 18))` (the user asked for 50% more tint visibility than 0.35).
 - Git: no attribution lines in commit messages. Commit messages are plain. Stage files by exact path.
 
-### 8. Where to start
+### 8. Confirmed defect: stale budget monitor when a new file opens
 
-1. Run Task 7 (a person). 2. Fix whatever it finds. 3. Commit the results doc. 4. Only then decide between item 8 in section 3 (neural-model project) and polish items 6–7. Do not start the neural-model project without a brainstorm.
+Evidence: `MPVPlayer.reselectTier()` has `guard target != activeTier else { return }` before the line that rebuilds `budgetMonitor`. Opening a second file that keeps the same tier therefore keeps the first file's frame rate and drop history. Example: a 24 fps file (budget 20.8 ms) then a 60 fps file (should be 8.3 ms): the old budget stays, so the tier does not step down when it should. Not reproduced in the app yet; found by reading the code.
+
+Fix (two edits in `Aagedal Media Player/Logic/MPV/MPVPlayer.swift`):
+
+Find:
+```swift
+        budgetMonitor = GPUBudgetMonitor(sourceFPS: getDouble("container-fps"), displayFPS: displayRefreshRate)
+        logger.info("Render tier: \(target.displayName
+```
+Replace:
+```swift
+        refreshBudgetMonitor()
+        logger.info("Render tier: \(target.displayName
+```
+
+Find:
+```swift
+    private func stepDownTier(reason: String) {
+```
+Replace:
+```swift
+    /// A new budget for the current file: its frame rate and a clean drop history.
+    private func refreshBudgetMonitor() {
+        budgetMonitor = GPUBudgetMonitor(sourceFPS: getDouble("container-fps"), displayFPS: displayRefreshRate)
+    }
+
+    private func stepDownTier(reason: String) {
+```
+
+Then in the `MPV_EVENT_FILE_LOADED` block, directly after `self.reselectTier()`, add `self.refreshBudgetMonitor()`. Check that `container-fps` is already set at `FILE_LOADED` (log it once); if it reads 0 there, move the call to the first `videoParamsDw` event instead.
+
+### 9. Test gap: the MPVPlayer wiring has no automated test
+
+Only the pure types (`TierSelector`, `GPUBudgetMonitor`, `VOPassTiming`, `MPVMetalLayer` callback) are tested. `reselectTier`, `stepDownTier`, `handleShaderFailure`, the floor reset per file, and `brokenTiers` are covered only by Task 7, by hand. Sections 8 and 10 are both bugs of that kind. Proposed design step (needs a short spec before anyone codes it): extract a pure `TierController` value type whose inputs are events (`drawableChanged`, `sourceChanged`, `enhanceToggled`, `fileLoaded`, `budgetVerdict`, `shaderFailed`) and whose outputs are tier changes, so the state machine can be tested without mpv. `MPVPlayer` would only apply its outputs.
+
+### 10. HDR and wide-gamut content is not gated
+
+Evidence: `reselectTier()` never looks at the colour encoding, although `MPVPlayer` already publishes `videoGamma` and `videoSigPeak`. The shaders (ArtCNN, FSRCNNX, RAVU, SSimSuperRes) work on the luma plane in its source encoding and were written for SDR; how they behave on PQ or HLG luma has not been measured. Do not guess; measure, then gate.
+
+1. Make a PQ test clip (recipe verified on 2026-09-30 to produce `hevc, yuv420p10le, smpte2084, bt2020` with the ffmpeg build at `/Users/filip/ffmpeg-apple-silicon/dist/9.0.1/full/ffmpeg`):
+
+```bash
+ffmpeg -hide_banner -loglevel error -y -f lavfi -i testsrc2=size=1280x720:rate=30 -t 10 \
+  -vf "format=yuv420p10le,zscale=tin=bt709:t=smpte2084:pin=bt709:p=bt2020:min=bt709:m=bt2020nc,format=yuv420p10le" \
+  -c:v libx265 -x265-params "colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:log-level=error" hdr-test.mp4
+```
+
+2. Play it fullscreen in amp with Enhance on and look for banding, halos or brightness shifts against Enhance off. A person must judge this.
+3. If it looks wrong, gate in `reselectTier()`: treat `HDRTransferResolver.resolve(colorTransfer: videoGamma) != .sdr` as "no enhancement". `HDRTransferResolver` already exists (`Aagedal Media Player/Logic/Scopes/HDRTransferResolver.swift`) and its own doc says it maps mpv's `video-params/gamma`. mpv documents those strings as "subject to change", so reuse the resolver instead of comparing strings yourself. Add a Swift Testing case for it.
+
+### 11. Verified: screenshots, scopes and the loupe do not see the enhancement
+
+amp captures frames with `screenshot-raw` (`MPVPlayer.screenshotRaw`, used by `FrameCapture` for the scopes and the loupe). On 2026-09-30, with standalone mpv 0.41.0 (same options as amp, fullscreen, drawable 3448×2164) on the synthetic ProRes clip, `screenshot-raw` with `FSRCNNX_x2_16-0-4-1.glsl` loaded and without any shader returned byte-identical data (1280×720, `bgr0`, same md5). `screenshot-to-file … video` was identical too, while `… window` differed (3448×2164, enhanced). So for an inspection player the measurement paths stay faithful to the source. Limits: one shader (FSRCNNX), standalone mpv rather than amp itself, one clip. Repeat with `ArtCNN_C4F16.glsl` and `ravu-zoom-ar-r3.hook`, then once inside amp (scopes with Enhance on and off on the same paused frame), before relying on it in docs.
+
+Script used (`shot.lua`; run with `OUT=<file>`):
+
+```lua
+mp.register_event("file-loaded", function()
+  mp.add_timeout(3, function()
+    local r = mp.command_native({"screenshot-raw"})
+    local f = io.open(os.getenv("OUT"), "wb"); f:write(r.data); f:close()
+    print("RAW", r.w, r.h, r.stride, r.format)
+    mp.command("quit")
+  end)
+end)
+```
+
+```bash
+OUT=raw.bin mpv --no-config --vo=gpu-next --gpu-api=vulkan --hwdec=videotoolbox --fs --pause --start=10 --no-audio --script=shot.lua --glsl-shaders=$HOME/.config/mpv/shaders/FSRCNNX_x2_16-0-4-1.glsl clip.mov
+md5 -q raw.bin
+```
+
+Because this makes the picture on screen differ from what the scopes measure, the UI should say so. Suggestion: add one line to the Enhance description in Settings ("Scopes, loupe and screenshots always use the original pixels.") only after the repeat above passes.
+
+### 12. Other risks and ideas, not started
+
+Each needs a decision before it becomes a task.
+
+- **No quick A/B.** Enhance can only be toggled in Settings. A menu item with a shortcut (View menu, routed through `AppCommand.setEnhance`) would make quality comparison instant. `rg setEnhance` shows the command is only posted from `RenderSettingsView`.
+- **Thermal and power state.** The monitor reacts to dropped frames, which come late. `ProcessInfo.processInfo.thermalState` (`.serious`, `.critical`) and `ProcessInfo.processInfo.isLowPowerModeEnabled` are available inputs for an earlier step-down. The earlier research noted about 30% less throughput on ProMotion fullscreen after heat. Untested idea.
+- **Compare Mode shares one GPU.** Each player measures only its own passes, so two enhanced panels can each look inside budget while the total is not. The drop counter would still catch it. The Compare row in Task 7 tests this by hand.
+- **Shader compile stall when a tier first loads.** The first second after loading a shader reports large summed pass time (81.66 ms for ArtCNN_C4F32 on a 720p24 probe) and mpv issue 12221 documents about 100 ms GLSL→SPIR-V stalls. The warm-up gate hides this from the monitor, but the viewer may see a hitch when Enhance turns on or the tier changes. Measure it with a screen recording before calling it fine.
+- **Shader cache crash on macOS.** mpv issue 17422 (shader cache bus error) was reported on libplacebo 7.360.0. amp pins 7.360.1. Unresolved from earlier research: whether `--gpu-shader-cache` is safe and worth enabling on 7.360.1 (cache removes the compile stall, the crash report says it can also crash).
+- **HDR/EDR colour hint.** Still open from the earlier research: the mpv manual says `target-colorspace-hint` works on Wayland, D3D11 and winvk, while the MoltenVK path and `VK_EXT_swapchain_colorspace` are both live on macOS. amp never sets `layer.colorspace`. Needs an on-device test with a real HDR file (the clip in section 10 works). Separate spec.
+- **Interlaced, anamorphic, rotated sources.** The ratio uses mpv's display size with rotation applied, so anamorphic and rotated files should be correct, but no test file of either kind was used. Interlaced content is not deinterlaced before the shaders in amp's current options (not checked).
+- **ProRes RAW and audio-only files** use AVPlayer or no video, so Enhance never applies to them (`useMPV` is false, or `videoSourceSize` is nil, so the selector returns Faithful).
+- **Accessibility and appearance for the glass panel.** Untested: System Settings → Accessibility → Display → Reduce Transparency and Increase Contrast, light and dark appearance, and VoiceOver. The ✕ and the badge have accessibility labels.
+- **Real low-resolution material.** All quality numbers come from a synthetic bicubic downscale of gaia.mov. Add real low-resolution, non-explicit footage (for example a 480p broadcast capture the user owns) before trusting the ranking beyond this file.
+- **Release checklist.** `CHANGELOG.md` has `## [1.6.1] — Unreleased` with an Added section and no entry for Enhance, the glass panel, the control-bar fixes or the macOS 26 minimum. `README.md` does not mention shaders or Enhance (`rg` finds nothing). Write both. Run the preflight in `docs/RELEASE.md` (signing, notarization). Set `sparkle:minimumSystemVersion` to 26.0 in the new `appcast.xml` item. Metal API validation must stay off in the Xcode scheme (MoltenVK issue 2226, see `CLAUDE.md`).
+- **Decisions already made, do not re-litigate.** Recorded by the earlier Qwen session in `~/.qwen/projects/-Users-filip-src/memory/project/` on 2026-09-30: (1) render profiles may only use shaders from `~/.config/mpv/shaders`, never copied from `~/Downloads/AI/Shaders` and never bundled, so `adaptive-sharpen.glsl` (only in Downloads) is out; (2) the default stays inspection-faithful and enhancement is opt-in; (3) selection by upscale ratio is approved. Also: the user prefers cheaper subagent models (Sonnet or Haiku) and low rate-limit use.
+
+### 13. Where to start
+
+1. Run Task 7 (a person). 2. Fix section 8 (small, testable). 3. Do the measurement steps in sections 10 and 11. 4. Fix whatever they find and whatever Task 7 finds; write the section 9 spec if the state machine keeps growing. 5. Commit the results docs. 6. Release checklist in section 12. 7. Only then decide between the neural-model project (section 6) and the polish items in section 3. Do not start the neural-model project without a brainstorm.
