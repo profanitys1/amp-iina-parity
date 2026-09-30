@@ -494,8 +494,8 @@
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/aagedal/MPVKit";
 			requirement = {
-				branch = main;
-				kind = branch;
+				kind = revision;
+				revision = 230c3174f1515898f24599147ad61c2a277d0dc2;
 			};
 		};
 		8EA00006AAAA000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
