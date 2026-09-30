@@ -15,6 +15,9 @@ struct RenderTierBadge: View {
             .missingShaderNames(named: RenderTier.allCases.flatMap(\.shaderFileNames))
     }
 
+    @Environment(\.accessibilityReduceMotion)
+    private var reduceMotion
+
     var body: some View {
         if player.activeTier != .faithful || player.isTierSteppedDown {
             HStack(spacing: 4) {
@@ -25,18 +28,22 @@ struct RenderTierBadge: View {
                      : player.activeTier.displayName)
                     .font(.system(size: 14, weight: .semibold))
             }
-            .foregroundColor(.white)
+            .foregroundStyle(.white)
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.black.opacity(0.75))
+                    .fill(Color.black.opacity(reduceMotion ? 0.85 : 0.75))
             )
             .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
             .help(missingShaderNames.isEmpty
                   ? "Enhance is altering the picture."
                   : "Not in the shader folder: \(missingShaderNames.joined(separator: ", "))")
             .accessibilityLabel("Enhancement: \(player.activeTier.displayName)")
+            .accessibilityHint(missingShaderNames.isEmpty
+                               ? "Video is being upscaled using \(player.activeTier.displayName) shader"
+                               : "Some shaders are missing from the folder")
+            .transition(.opacity.combined(with: .scale(scale: reduceMotion ? 1.0 : 0.95)))
         }
     }
 }
