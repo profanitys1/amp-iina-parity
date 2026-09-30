@@ -30,18 +30,60 @@ holds and every one of its shader files exists.
 |---|---|---|---|
 | `artcnnStrong` | `ArtCNN_C4F32.glsl` | `scale=lanczos` | ≥ 1.9 |
 | `artcnnLight` | `ArtCNN_C4F16.glsl` | `scale=lanczos` | ≥ 1.9 |
-| `ravuZoom` | `ravu-zoom-ar-r3.hook` | `scale=lanczos` | > 1.0 and < 1.9 |
+| `ravuZoom` | `ravu-zoom-ar-r3.hook` | `scale=lanczos` | > 1.0 |
 | `sharpen` | `SSimSuperRes.glsl` | `scale=ewa_lanczossharp`, `scaler-resizes-only=no` | > 1.0 |
 | `faithful` | none | `scale=lanczos` | always |
 
 The ArtCNN tiers start at 1.9 because they always emit exactly 2×. Below about
-1.9 their overshoot would be downscaled by `dscale`, so `ravuZoom` is used there
-instead: it renders at the target size directly. The ArtCNN tiers do not add a
+1.9 their overshoot would be downscaled by `dscale`. `ravuZoom` renders at the
+target size directly, so it is eligible at every upscale ratio: it is the choice
+below 1.9, and the step-down when ArtCNN does not fit. The ArtCNN tiers do not add a
 chroma shader, because CfL counts as enhancement and stays a manual choice.
 
 **Ratio** = min(drawable width ÷ source width, drawable height ÷ source height).
 The source size is normalised for rotation. Use `MPVPlayer.videoSourceSize` and
-the layer's `drawableSize`.
+the layer's `drawableSize`, which `MPVMetalLayer`'s setter reports on every
+accepted change. Do not use mpv's `osd-width`/`osd-height`. The MPVKit fork's
+`moltenvk` context (patch `0001-player-add-moltenvk-context.patch`) returns
+`VO_NOTIMPL` from `control` and resizes only in `reconfig`, so mpv never sees a
+`VO_EVENT_RESIZE`.
+
+## Verified facts (2026-09-30)
+
+These were checked against mpv v0.41.0 and libplacebo v7.360.1 source, and by
+running `/opt/homebrew/bin/mpv` v0.41.0 / libplacebo v7.360.1 on an Apple M1 Pro
+with a 120 Hz display.
+
+- **`vo-passes` format.** Read as a string, `vo-passes` returns JSON:
+  `m_option_type_node.print` is `print_node`, which calls `json_write`. The shape
+  is `{"fresh":[{"desc","last","avg","peak","count","samples"}],"redraw":[…]}`,
+  with every time in nanoseconds.
+- **`vo-passes` counts.** Sample counts are kept per libplacebo pass, up to 256
+  (`pl_dispatch_info.samples[256]`). After a shader change they restart from 0.
+  One run measured an 81 ms compile spike while the smallest per-pass count was
+  still 0.
+- **Blocking.** Reading `vo-passes` blocks the caller: `vo_control` calls
+  `mp_dispatch_run` and waits for the VO thread. Read it off the main thread.
+- **Drop counters.** Only `frame-drop-count` applies ("Frames dropped by VO
+  (when using `--framedrop=vo`)"). amp now sets `framedrop=vo`.
+  `mistimed-frame-count` and `vo-delayed-frame-count` count only in display-sync
+  mode, which amp does not use. There is no `vo-drop-frame-count` in 0.41.
+- **Failed user shader.** libplacebo logs
+  `[vo/gpu-next/libplacebo] Failed executing hook, disabling` at error level
+  (`renderer.c:1103`).
+- **Measured cost.** 720p source fullscreen at 3448×2164 (≈2.7×), with the total
+  of fresh-pass `avg` values and the drop rate once warm:
+
+  | Stack | 24 fps source | 60 fps source |
+  |---|---|---|
+  | faithful | — | 4.2 ms, 0 drops |
+  | `SSimSuperRes` | 10.1 ms, 0 drops | — |
+  | `ravu-zoom-ar-r3` | 9.3 ms, 2 drops (start-up only) | — |
+  | `ArtCNN_C4F16` | 12.0 ms, 0 drops | — |
+  | `ArtCNN_C4F32` | 28.2 ms, ~8 drops/s | 37.7 ms, ~43 drops/s |
+
+  At 24 fps, C4F32 drops frames while using only 68% of the 41.7 ms frame period.
+  C4F16 at 29% does not drop. So the budget fraction is **0.5**, not 0.7.
 
 ## Components
 
@@ -50,17 +92,21 @@ the layer's `drawableSize`.
    `RenderProfile` is kept for the manual path. Tiers and profiles share
    `ShaderLibrary` to resolve paths.
 2. **`TierSelector`** (new, pure). Input: `ratio: Double`, `available: Set<RenderTier>`,
-   `floor: RenderTier`, `enhance: Bool`. Output: a `RenderTier`. It returns the
-   heaviest eligible, available tier that is no heavier than `floor`. It returns
-   `faithful` when `enhance` is false or nothing else qualifies. It has no mpv or
-   UI dependency.
+   `floor: RenderTier`. Output: a `RenderTier`. It returns the heaviest eligible,
+   available tier that is no heavier than `floor`, or `faithful` when nothing else
+   qualifies. It has no mpv or UI dependency. The Enhance switch is checked by the
+   caller.
 3. **`GPUBudgetMonitor`** (new, `Logic/MPV/GPUBudgetMonitor.swift`).
-   - Inputs: `vo-passes` samples, and the counters `frame-drop-count`,
-     `vo-drop-frame-count` and `mistimed-frame-count`.
-   - Budget: 0.7 × min(1 / display fps, 1 / source fps).
-   - It emits `overBudget` in either of two cases. The first is when the mean
-     total pass time over 30 frames exceeds the budget. The second is when the
-     combined counters rise by 3 or more within 2 s.
+   - Inputs, sampled once per second while playing: the `vo-passes` JSON and
+     `frame-drop-count`.
+   - Budget: 0.5 × 1 / min(source fps, display fps). Fresh frames are needed only
+     at the lower of the two rates. Source fps is `container-fps`. Display fps is
+     the value amp already passes to `applyDisplayRefreshRate`.
+   - Warm-up: timing is judged only once every fresh pass has at least 30 samples.
+   - It emits `overBudget` in either of two cases. The first is when the sum of
+     fresh-pass `avg` values exceeds the budget. The second is when
+     `frame-drop-count` rises by 3 or more within 2 s.
+   - When no frame rate is known, only the drop counter judges.
    - It resets when the tier changes.
 4. **`MPVPlayer` wiring.**
    - Re-select the tier when the drawable size or source size changes, with a
@@ -95,23 +141,26 @@ the layer's `drawableSize`.
 
 ## Build order and testing
 
-1. **Spike (throwaway).** In the app, log `vo-passes` totals at 1080p fullscreen
-   under `faithful`, `sharpen` and `artcnnLight`.
-   - Pass: the totals are non-zero and rise with shader load.
-   - Fail: build the monitor on drop counters only.
-   - Record the outcome in this spec.
-2. **`TierSelector`.** Table test over ratios {0.5, 1.0, 1.2, 1.57, 1.9, 2.0,
+1. **Swift 6.4 language mode.** The project is set to Swift 6 but did not build
+   under Xcode 27 / Swift 6.4. Four isolation fixes make the full suite pass in
+   Swift 6 mode: 615 passed, 0 failed, 5 skipped. The deployment target stays
+   macOS 15.0. New tests use Swift Testing.
+2. **Standalone mpv check (done).** `vo-passes` totals are non-zero and rise with
+   shader load; see "Verified facts". The in-app check comes in the last step.
+3. **`TierSelector`.** Table test over ratios {0.5, 1.0, 1.2, 1.57, 1.9, 2.0,
    3.0}, each crossed with all tiers available versus some files missing, and
    with every `floor`.
-3. **`GPUBudgetMonitor`.** Test with injected samples in four cases: under budget,
+4. **`GPUBudgetMonitor`.** Test with injected samples in four cases: under budget,
    over budget, a counter spike, and empty `vo-passes`.
-4. **Wiring and UI.**
-5. **On-device check.**
-   - Play 1080p and 720p sources in a window, fullscreen on a 14" display (1.57×),
-     and in Compare Mode.
+5. **Wiring and UI.**
+6. **On-device check.**
+   - Play 1080p and 720p sources in a window, fullscreen, and in Compare Mode.
+     On this Mac (M1 Pro, fullscreen drawable 3448×2164), fullscreen 1080p is
+     1.80× and fullscreen 720p is 2.69×.
    - Confirm the expected tier and the badge in each case.
-   - Force an overload with `artcnnStrong` at 3×. It should step down within
-     about 1 s and not oscillate.
+   - Force an overload by playing a 720p 60 fps source fullscreen (2.69×), where
+     `artcnnStrong` measured 37.7 ms. It should step down within about 3 s (1 s
+     sampling plus the 2 s drop window) and not oscillate.
 
 ## Out of scope
 
