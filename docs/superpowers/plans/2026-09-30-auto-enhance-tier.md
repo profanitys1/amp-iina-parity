@@ -29,8 +29,9 @@ Tasks 1–6 were implemented and landed on `main`, verified with a clean build (
 | `2f0fc09` | Control-bar gear opens Settings (`openSettings()`; `showSettingsWindow:` was removed in macOS 14); Playlist button toggles; inspector ✕ |
 | `fbbf129` | Deployment target macOS 26.0 (`glassEffect` needs 26); `Text + Text` deprecation fixed |
 | `1beebdd` | Playlist/metadata panel floats over the picture as Liquid Glass (`.clear` tinted 50% black); ⌘I or ✕ closes it |
+| `2569bc3` | Heaviest tier `artcnnStrong` (ArtCNN_C4F32) replaced by `fsrcnnx` (FSRCNNX_x2_16-0-4-1) after the gaia.mov benchmark; `VOPassTiming` ignores passes mpv never samples |
 
-Differences from the task text below: the deployment target is now 26.0, not 15.0, and the inspector is no longer a native `.inspector` column. The Tasks 1–6 sections are kept as the record of what landed. **Do not execute Preconditions or Tasks 1–6 again.** Only Task 7 remains, and it needs a person.
+Differences from the task text below: the deployment target is now 26.0, not 15.0; the inspector is no longer a native `.inspector` column; and `artcnnStrong` in the code blocks is now `fsrcnnx`. The Tasks 1–6 sections are kept as the record of what landed. **Do not execute Preconditions or Tasks 1–6 again.** Only Task 7 remains, and it needs a person.
 
 ## How to execute this plan
 
@@ -1428,7 +1429,9 @@ This checks what the unit tests cannot reach: `vo-passes` through the fork's `mo
 | RAVU zoom | `ravu-zoom-ar-r3.hook` | 10.7 | 0 | yes |
 | Sharpened | `SSimSuperRes.glsl` | 11.2 | 0 | yes |
 | ArtCNN light | `ArtCNN_C4F16.glsl` | 13.7 | 0 | yes |
-| ArtCNN strong | `ArtCNN_C4F32.glsl` | 39.1 | ~15/s | no |
+| FSRCNNX | `FSRCNNX_x2_16-0-4-1.glsl` | ~16.1 (15.2 sampled + unsampled final pass) | 0 | yes, narrowly |
+
+Since commit `2569bc3` the heaviest tier is FSRCNNX; ArtCNN C4F32 (39.1 ms, no quality gain) was removed.
 
 **Files:**
 - Modify: `docs/superpowers/specs/2026-09-30-auto-enhance-tier-design.md` (append "Device results")
@@ -1465,9 +1468,9 @@ Every tier change logs `Render tier: <name> ratio=<r> drawable=<w>x<h>`. The bad
 
 | Case | Expected log | Expected badge |
 |---|---|---|
-| Play gaia.mov in its window | `ratio=` equals min(drawable width/1280, drawable height/720). Tier by the rules: ≤ 1.0 → none (Faithful); > 1.0 and < 1.9 → `RAVU zoom`; ≥ 1.9 → `ArtCNN strong`, then a step-down to `ArtCNN light` | hidden at Faithful, otherwise the tier name |
-| Fullscreen (ratio 2.694) | `Render tier: ArtCNN strong`, then within about 3 s `stepped down: over GPU budget`, then `Render tier: ArtCNN light`. No further lines while playing | "ArtCNN light · stepped down" |
-| Leave fullscreen while playing | One new `Render tier:` line about 300 ms after the resize ends, never heavier than ArtCNN light (the floor holds until the next file) | matches the logged tier |
+| Play gaia.mov in its window | `ratio=` equals min(drawable width/1280, drawable height/720). Tier by the rules: ≤ 1.0 → none (Faithful); > 1.0 and < 1.9 → `RAVU zoom`; ≥ 1.9 → `FSRCNNX` | hidden at Faithful, otherwise the tier name |
+| Fullscreen (ratio 2.694) | `Render tier: FSRCNNX` and no step-down (about 16.1 ms against 16.7 ms). If the Mac is warm or throttling, one step-down to `ArtCNN light` is also a pass | "FSRCNNX" (or "ArtCNN light · stepped down") |
+| Leave fullscreen while playing | One new `Render tier:` line about 300 ms after the resize ends if the ratio crosses a rule boundary; never heavier than the floor reached so far in this file | matches the logged tier |
 | Pause for 10 s, then resume | No step-down lines while paused | unchanged |
 | ⌘I, or the Playlist button | The glass panel appears over the picture; the ✕ and ⌘I close it | — |
 
@@ -1477,20 +1480,18 @@ Pass: the sequence matches, and within one file no tier is entered, stepped down
 
 ```bash
 mkdir -p "$TMPDIR/amp-verify/shaders"
-cp ~/.config/mpv/shaders/SSimSuperRes.glsl ~/.config/mpv/shaders/ArtCNN_C4F16.glsl ~/.config/mpv/shaders/ArtCNN_C4F32.glsl "$TMPDIR/amp-verify/shaders/"
-printf '//!HOOK LUMA\n//!BIND HOOKED\nvec4 hook() { return syntax error }\n' > "$TMPDIR/amp-verify/shaders/ArtCNN_C4F16.glsl"
+cp ~/.config/mpv/shaders/SSimSuperRes.glsl ~/.config/mpv/shaders/ArtCNN_C4F16.glsl "$TMPDIR/amp-verify/shaders/"
+printf '//!HOOK LUMA\n//!BIND HOOKED\nvec4 hook() { return syntax error }\n' > "$TMPDIR/amp-verify/shaders/FSRCNNX_x2_16-0-4-1.glsl"
 echo "$TMPDIR/amp-verify/shaders"
 ```
 
 In Settings → Rendering → Shader Folder, click **Choose…** and pick the printed folder. Play gaia.mov fullscreen.
 
 Expected log, in order:
-1. `Render tier: ArtCNN strong`
-2. a step-down over budget
-3. `Render tier: ArtCNN light`
-4. `[mpv/vo/gpu-next/libplacebo] Failed executing hook, disabling`
-5. `stepped down: libplacebo disabled a shader hook`
-6. `Render tier: Sharpened` (RAVU zoom is not in this folder, so it counts as unavailable)
+1. `Render tier: FSRCNNX`
+2. `[mpv/vo/gpu-next/libplacebo] Failed executing hook, disabling`
+3. `stepped down: libplacebo disabled a shader hook`
+4. `Render tier: ArtCNN light`
 
 Afterwards, click **Reset** in Shader Folder.
 

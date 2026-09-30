@@ -23,12 +23,14 @@ Max, including under thermal throttling.
 
 ## Tier ladder
 
+Revised 2026-09-30 (commit `2569bc3`): the heaviest tier is FSRCNNX, not ArtCNN C4F32. On gaia.mov, C4F32 matched C4F16's quality at three times the cost; FSRCNNX has the best PSNR-Y and SSIM and fits the 30 fps budget. See `docs/research/2026-09-30-gaia-upscaler-benchmark.md`.
+
 Tiers are listed heaviest first. A tier is eligible only when its ratio condition
 holds and every one of its shader files exists.
 
 | Tier | Shaders | Scaler options | Eligible ratio |
 |---|---|---|---|
-| `artcnnStrong` | `ArtCNN_C4F32.glsl` | `scale=lanczos` | ≥ 1.9 |
+| `fsrcnnx` | `FSRCNNX_x2_16-0-4-1.glsl` | `scale=lanczos` | ≥ 1.9 |
 | `artcnnLight` | `ArtCNN_C4F16.glsl` | `scale=lanczos` | ≥ 1.9 |
 | `ravuZoom` | `ravu-zoom-ar-r3.hook` | `scale=lanczos` | > 1.0 |
 | `sharpen` | `SSimSuperRes.glsl` | `scale=ewa_lanczossharp`, `scaler-resizes-only=no` | > 1.0 |
