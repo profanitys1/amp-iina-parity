@@ -132,7 +132,21 @@ final class SparkleUpdater: ObservableObject {
 
         let response = alert.runModal()
         if response == .alertSecondButtonReturn {
-            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+            SettingsWindow.openFromAppKit()
         }
+    }
+}
+
+/// Opens the SwiftUI `Settings` scene from code that has no SwiftUI
+/// environment. macOS 14 removed the `showSettingsWindow:` action, and
+/// `openSettings` exists only inside a view, so this presses the app menu's
+/// own Settings item, which SwiftUI keeps wired to the scene.
+enum SettingsWindow {
+    static func openFromAppKit() {
+        guard let appMenu = NSApp.mainMenu?.items.first?.submenu,
+              let index = appMenu.items.firstIndex(where: {
+                  $0.keyEquivalent == "," && $0.keyEquivalentModifierMask == .command
+              }) else { return }
+        appMenu.performActionForItem(at: index)
     }
 }

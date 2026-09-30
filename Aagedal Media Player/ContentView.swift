@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var timecodeMode: TimecodeDisplayMode = .relative
     @State private var isDropTargeted = false
     @State private var showInspector = false
+    @Environment(\.openSettings) private var openSettings
     @State private var inspectorTab: InspectorTab = .playlist
     @StateObject private var loupe = InspectionLoupeState()
     @StateObject private var loupePrimaryCapture = LoupeFrameCapture()
@@ -237,7 +238,7 @@ struct ContentView: View {
                 .allowsHitTesting(false)
             }
         }
-        .ignoresSafeArea()
+        .ignoresSafeArea(edges: .top)
         .focusedSceneValue(\.isMediaLoaded, isMediaLoaded)
         .focusedSceneValue(\.isCompareModeActive, compareSession.isActive)
         .focusedSceneValue(\.canOpenPreviousFile, windowCoordinator.canOpenPreviousFile)
@@ -273,13 +274,24 @@ struct ContentView: View {
         }
         .inspector(isPresented: $showInspector) {
             VStack(spacing: 0) {
-                Picker("", selection: $inspectorTab) {
-                    ForEach(InspectorTab.allCases) { tab in
-                        Text(tab.title).tag(tab)
+                HStack(spacing: 8) {
+                    Picker("", selection: $inspectorTab) {
+                        ForEach(InspectorTab.allCases) { tab in
+                            Text(tab.title).tag(tab)
+                        }
                     }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+
+                    Button { showInspector = false } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Close inspector")
+                    .accessibilityLabel("Close inspector")
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
                 .padding(8)
 
                 Divider()
@@ -422,10 +434,8 @@ struct ContentView: View {
             } else {
                 FloatingOSCView(
                     controller: controller,
-                    onShowPlaylist: { showInspector = true },
-                    onShowSettings: {
-                        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-                    }
+                    onShowPlaylist: { showInspector.toggle() },
+                    onShowSettings: { openSettings() }
                 )
                 .transition(.opacity)
                 .frame(height: 120)
