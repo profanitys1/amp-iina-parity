@@ -176,11 +176,6 @@ def validate_appcast_items(
         except ValueError as error:
             validation.require(False, str(error))
         validation.equal(item.title, f"Version {item.version}", f"{label} title")
-        validation.equal(
-            item.minimum_system_version,
-            deployment_target,
-            f"{label} minimum system version",
-        )
         validation.require(item.length.isdigit() and int(item.length) > 0, f"{label} length is invalid")
         decode_base64(item.signature, 64, f"{label} EdDSA signature", validation)
 
@@ -190,6 +185,10 @@ def validate_appcast_items(
         validation.equal(parsed_url.scheme, "https", f"{label} enclosure URL scheme")
         validation.equal(parsed_url.netloc, "github.com", f"{label} enclosure URL host")
         validation.equal(parsed_url.path, expected_path, f"{label} enclosure URL path")
+
+    if items:
+        newest = items[0]
+        newest_label = f"appcast {newest.version} ({newest.build})"
 
 
 def validate_ffmpeg(validation: Validation) -> None:
@@ -410,6 +409,11 @@ def main() -> int:
         else:
             validation.equal(version, newest.version, "published appcast version")
             validation.equal(build, newest.build, "published appcast build")
+            validation.equal(
+                newest.minimum_system_version,
+                deployment_target,
+                f"appcast {newest.version} ({newest.build}) minimum system version",
+            )
 
     validate_scheme(validation)
     validate_ffmpeg(validation)

@@ -1289,7 +1289,14 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         var target = RenderTier.faithful
         var steppedDown = false
         var ratioText = "unknown"
-        if UserDefaults.standard.value(for: AppSettings.enhance),
+
+        // HDR content (PQ/HLG) bypasses enhancement tiers. The shaders in the
+        // ladder were designed for SDR luma; how they behave on PQ or HLG luma
+        // has not been measured. Until that measurement exists, stay faithful.
+        let isHDR = HDRTransferResolver.resolve(colorTransfer: videoGamma) != .sdr
+
+        if !isHDR,
+           UserDefaults.standard.value(for: AppSettings.enhance),
            let source = videoSourceSize,
            let ratio = TierSelector.upscaleRatio(source: source, drawable: drawableSize) {
             ratioText = String(format: "%.3f", ratio)
@@ -1299,6 +1306,8 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             })
             target = TierSelector.select(ratio: ratio, available: available, floor: tierFloor)
             steppedDown = target < TierSelector.select(ratio: ratio, available: available, floor: .fsrcnnx)
+        } else if isHDR {
+            ratioText = "HDR (no enhancement)"
         }
         isTierSteppedDown = steppedDown
         guard target != activeTier else { return }
