@@ -52,9 +52,12 @@ Before release, update the project version/build and add the matching
 
 ```bash
 python3 scripts/release-preflight.py
-xcodebuild test -project "Aagedal Media Player.xcodeproj" -scheme "Aagedal Media Player" -destination "platform=macOS"
-xcodebuild analyze -project "Aagedal Media Player.xcodeproj" -scheme "Aagedal Media Player" -destination "platform=macOS"
+xcodebuild test -project "Aagedal Media Player.xcodeproj" -scheme "Aagedal Media Player" -destination "platform=macOS" CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM=
+xcodebuild analyze -project "Aagedal Media Player.xcodeproj" -scheme "Aagedal Media Player" -destination "platform=macOS" CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM=
 ```
+
+The signing overrides are needed on a Mac with no "Mac Development" certificate; without them the
+build fails to sign and neither command starts.
 
 The preflight is local and deterministic: it does not make network requests.
 It verifies project and Sparkle metadata, version/build monotonicity, appcast

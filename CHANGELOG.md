@@ -5,6 +5,8 @@ All notable changes to Aagedal Media Player.
 ## [1.6.1] — Unreleased
 
 ### Added
+- An opt-in **Enhance** mode that picks a sharpening or neural upscaling shader tier from how much the picture is enlarged, steps down to a lighter tier when the GPU cannot keep up, and shows a badge naming the active tier. Shaders come only from the user's mpv shader folder; nothing is bundled, and the default render path stays faithful to the source.
+- A see-through Liquid Glass panel floating over the picture for the playlist and metadata, toggled with ⌘I or the Playlist button and closed with ⌘I or the ✕.
 - Bounded iXML recording labels and track metadata in classic big-endian RIFX files, with independent XML encoding validation.
 - Optional bounded APFS disk-full integration checks for review save/delete preservation and retry, alongside HFS+ coverage.
 - Bounded UTF-32LE/BE iXML recording labels and track metadata, with strict Unicode validation and preserved parsing limits.
@@ -59,6 +61,7 @@ All notable changes to Aagedal Media Player.
 - IINA's chrome fade timings: the overlay fades over 0.25 s and the controls hide after 2.5 s without pointer movement.
 
 ### Changed
+- The minimum supported macOS is now 26.0.
 - Add explicit Retry Save for failed review-note writes, flush current text drafts before retrying, and prevent reload from discarding unsaved changes.
 - Preserve pending review-note edits before switching copies, migrating timebases or exporting, and keep the original review active if source timing changes during migration saving.
 - Preserve exact broadcast frame rates from decimal metadata so drop-frame review timecodes and editor-marker exports use the correct rational timebase. Existing reviews retain their stored rates and are never silently retimed.
@@ -92,6 +95,7 @@ All notable changes to Aagedal Media Player.
 - The README and the in-app key table now document the real bindings, including the `[`/`]` rate-versus-wipe precedence.
 
 ### Fixed
+- The Settings control-bar gear now opens the Settings window (⌘,), and the inspector's ✕ closes it again.
 - Prevent queued comparison-note saves from beginning after comparison mode closes or its source pair changes.
 - Focused comparison toolbar controls receive Space and arrow keys without triggering playback; compact settings scroll to keyboard-focused controls and show focus rings.
 - RIFX playback and trim export fail with conversion guidance while their decoder paths misinterpret big-endian sample bytes.

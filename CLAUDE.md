@@ -8,20 +8,24 @@ This is a macOS SwiftUI app (deployment target macOS 26.0) built with Xcode. The
 
 ```bash
 # Build from command line
-xcodebuild -project "Aagedal Media Player.xcodeproj" -scheme "Aagedal Media Player" build
+xcodebuild -project "Aagedal Media Player.xcodeproj" -scheme "Aagedal Media Player" -destination "platform=macOS" CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM= build
 
 # Clean build
-xcodebuild -project "Aagedal Media Player.xcodeproj" -scheme "Aagedal Media Player" clean build
+xcodebuild -project "Aagedal Media Player.xcodeproj" -scheme "Aagedal Media Player" -destination "platform=macOS" CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM= clean build
 
 # Resolve only the dependency revisions recorded in Package.resolved
 xcodebuild -resolvePackageDependencies -project "Aagedal Media Player.xcodeproj" -onlyUsePackageVersionsFromResolvedFile
 
 # Run unit tests
-xcodebuild test -project "Aagedal Media Player.xcodeproj" -scheme "Aagedal Media Player" -destination "platform=macOS"
+xcodebuild test -project "Aagedal Media Player.xcodeproj" -scheme "Aagedal Media Player" -destination "platform=macOS" CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM=
 
 # Run Xcode static analysis
-xcodebuild analyze -project "Aagedal Media Player.xcodeproj" -scheme "Aagedal Media Player" -destination "platform=macOS"
+xcodebuild analyze -project "Aagedal Media Player.xcodeproj" -scheme "Aagedal Media Player" -destination "platform=macOS" CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM=
 ```
+
+The signing overrides (`CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM=`) are
+needed on a Mac with no "Mac Development" certificate. Without them the build fails to sign and
+a test run never starts. Drop them when a real signing identity is available.
 
 The shared scheme includes the `Aagedal Media Player Tests` XCTest target. No GitHub Actions workflows or separate linting tool are configured; build, test, and analysis verification is run locally.
 

@@ -49,8 +49,11 @@ fixtures are never committed:
 
 ```bash
 scripts/generate-test-fixtures.sh
-xcodebuild test -project "Aagedal Media Player.xcodeproj" -scheme "Aagedal Media Player" -destination "platform=macOS"
+xcodebuild test -project "Aagedal Media Player.xcodeproj" -scheme "Aagedal Media Player" -destination "platform=macOS" CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM=
 ```
+
+The signing overrides at the end are needed on a Mac with no "Mac Development" certificate:
+without them the build fails to sign and the test run never starts.
 
 The generator requires a full ffmpeg installation with libx264, libx265 and
 alac. Set `FFMPEG=/path/to/ffmpeg` to select one explicitly. Without the
@@ -182,6 +185,19 @@ original sidecar and any existing destination review are preserved.
 For older reviews with rounded broadcast rates, use **Notes → Migrate Rounded
 Timebases…** to preview and save a corrected copy while keeping recorded frame
 numbers. Use **Open Notes Copy…** to reopen it in a later session.
+
+### Enhance (shader upscaling)
+Enhance (Settings → Rendering) picks a sharpening or neural upscaling shader
+tier automatically from how much the picture is enlarged, and steps down to a
+lighter tier when the GPU cannot keep up. A badge over the picture names the
+active tier. Shaders come only from your mpv shader folder
+(`~/.config/mpv/shaders`); nothing is bundled. Enhancement alters the image, so
+it is off by default and the default render path stays faithful to the source.
+
+### Playlist and metadata panel
+⌘I (or the Playlist button) floats a see-through Liquid Glass panel over the
+picture with the folder's other media and the current file's metadata; ⌘I or
+the ✕ closes it.
 
 ### Inspection loupe
 Open the magnifying-glass control (Command-Shift-M) to enable a 2×, 4×, or 8×
