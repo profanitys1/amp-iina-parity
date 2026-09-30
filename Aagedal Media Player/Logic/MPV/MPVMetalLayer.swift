@@ -28,14 +28,19 @@ class MPVMetalLayer: CAMetalLayer {
         wantsExtendedDynamicRangeContent = true
     }
 
+    /// Called after every accepted drawable size change, on whichever thread
+    /// assigned it. Set once, before the layer is handed to mpv.
+    nonisolated(unsafe) var onDrawableSizeChange: (@Sendable (CGSize) -> Void)?
+
     // Workaround for a MoltenVK that sets the drawableSize to 1x1 to forcefully complete
     // the presentation, this causes flicker and the drawableSize possibly staying at 1x1
     nonisolated override var drawableSize: CGSize {
         get { return super.drawableSize }
         set {
-            if Int(newValue.width) > 1 && Int(newValue.height) > 1 {
-                super.drawableSize = newValue
-            }
+            guard Int(newValue.width) > 1 && Int(newValue.height) > 1 else { return }
+            let old = super.drawableSize
+            super.drawableSize = newValue
+            if super.drawableSize != old { onDrawableSizeChange?(super.drawableSize) }
         }
     }
 }

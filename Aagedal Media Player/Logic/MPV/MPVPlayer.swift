@@ -168,6 +168,8 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     /// this object can be deallocated.  Must be called before dropping the
     /// last external strong reference.
     func destroy() {
+        tierReselection?.cancel()
+        budgetSampling?.cancel()
         guard mpv != nil else { return }
 
         // Disable the wakeup callback first so no new readEvents() calls
@@ -195,6 +197,10 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
 
     func attachDrawable(_ layer: MPVMetalLayer) {
         metalLayer = layer
+        drawableSize = layer.drawableSize
+        layer.onDrawableSizeChange = { [weak self] size in
+            Task { @MainActor in self?.drawableSizeDidChange(size) }
+        }
         setupMPV()
 
         if let url = pendingURL {
@@ -875,6 +881,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                                 DispatchQueue.main.async {
                                     self.videoSourceSize = NSSize(width: dispW, height: dispH)
                                     self.videoAspectRatio = CGFloat(dispW) / CGFloat(dispH)
+                                    self.scheduleTierReselection()
                                     scalingLogger.info("mpv emitted videoSourceSize=\(dispW)x\(dispH) (ratio=\(Double(dispW) / Double(dispH)))")
                                 }
                             }
@@ -919,6 +926,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                         if level == "error" || level == "fatal" {
                             self.logger.error("[mpv/\(prefix, privacy: .public)] \(text, privacy: .public)")
                         }
+                        if GPUBudgetMonitor.isShaderFailure(prefix: prefix, text: text) {
+                            DispatchQueue.main.async { [weak self] in self?.handleShaderFailure() }
+                        }
                         // mpv's backward-playback algorithm prints this exact
                         // string when it gives up. Signal subscribers so they
                         // can fall back to a different reverse strategy.
@@ -947,6 +957,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                         self.reversalBufferStep = -1
                         self.lastReversalBufferRaise = nil
                         self.isFileLoaded = true
+                        // A new file gets the whole ladder back. Broken tiers stay excluded.
+                        self.tierFloor = .artcnnStrong
+                        self.reselectTier()
                         if self.pendingSeekAfterLoad > 0 {
                             self.seek(to: self.pendingSeekAfterLoad)
                             self.pendingSeekAfterLoad = 0
@@ -1125,6 +1138,23 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     /// The shader stack currently applied to the render path.
     private(set) var renderProfile: RenderProfile = .off
 
+    /// The automatic tier in effect. `.faithful` whenever Enhance is off or a
+    /// manual profile other than Faithful is chosen.
+    @Published private(set) var activeTier: RenderTier = .faithful
+
+    /// True when the GPU monitor forced a lighter tier than the ratio allows.
+    @Published private(set) var isTierSteppedDown = false
+
+    /// The heaviest tier allowed after GPU step-downs. Reset for each file.
+    private var tierFloor: RenderTier = .artcnnStrong
+    /// Tiers whose shaders libplacebo rejected. Kept for this player's lifetime.
+    private var brokenTiers: Set<RenderTier> = []
+    private var drawableSize: CGSize = .zero
+    private var displayRefreshRate: Double = 0
+    private var budgetMonitor = GPUBudgetMonitor(sourceFPS: 0, displayFPS: 0)
+    private var tierReselection: Task<Void, Never>?
+    private var budgetSampling: Task<Void, Never>?
+
     private var shaderLibrary: ShaderLibrary {
         ShaderLibrary(directoryPath: UserDefaults.standard.value(for: AppSettings.shaderDirectory))
     }
@@ -1200,22 +1230,145 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     /// Switches the shader stack on a running player.
-    ///
-    /// The list is cleared and rebuilt one path at a time so a directory
-    /// containing mpv's list separator cannot corrupt the stack here.
     func setRenderProfile(_ profile: RenderProfile) {
         renderProfile = profile
         UserDefaults.standard.set(profile.rawValue, for: AppSettings.renderProfile)
 
         guard mpv != nil else { return }
 
+        applyShaderStack(
+            paths: shaderLibrary.shaderPaths(for: profile),
+            scaleOptions: profile.scaleOptions,
+            deband: profile.enablesDeband
+        )
+        activeTier = .faithful
+        isTierSteppedDown = false
+        updateBudgetSampling()
+        reselectTier()
+    }
+
+    /// Replaces the shader list one path at a time, so a directory containing
+    /// mpv's list separator cannot corrupt it, then sets the scaler options.
+    private func applyShaderStack(paths: [String], scaleOptions: [String: String], deband: Bool) {
         command("change-list", args: ["glsl-shaders", "clr", ""])
-        for path in shaderLibrary.shaderPaths(for: profile) {
+        for path in paths {
             command("change-list", args: ["glsl-shaders", "append", path])
         }
-        setFlag("deband", profile.enablesDeband)
-        for (name, value) in profile.scaleOptions {
+        setFlag("deband", deband)
+        for (name, value) in scaleOptions {
             setString(name, value)
+        }
+    }
+
+    // MARK: - Automatic Enhancement
+
+    func setEnhanceEnabled(_ enabled: Bool) {
+        UserDefaults.standard.set(enabled, for: AppSettings.enhance)
+        reselectTier()
+    }
+
+    private func drawableSizeDidChange(_ size: CGSize) {
+        drawableSize = size
+        scheduleTierReselection()
+    }
+
+    /// A live window resize reports many sizes. Swapping shaders on each one
+    /// would recompile them repeatedly, so wait for the size to settle.
+    private func scheduleTierReselection() {
+        tierReselection?.cancel()
+        tierReselection = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
+            self?.reselectTier()
+        }
+    }
+
+    private func reselectTier() {
+        guard mpv != nil, renderProfile == .off else { return }
+
+        var target = RenderTier.faithful
+        var steppedDown = false
+        var ratioText = "unknown"
+        if UserDefaults.standard.value(for: AppSettings.enhance),
+           let source = videoSourceSize,
+           let ratio = TierSelector.upscaleRatio(source: source, drawable: drawableSize) {
+            ratioText = String(format: "%.3f", ratio)
+            let library = shaderLibrary
+            let available = Set(RenderTier.allCases.filter { tier in
+                !brokenTiers.contains(tier) && library.missingShaderNames(named: tier.shaderFileNames).isEmpty
+            })
+            target = TierSelector.select(ratio: ratio, available: available, floor: tierFloor)
+            steppedDown = target < TierSelector.select(ratio: ratio, available: available, floor: .artcnnStrong)
+        }
+        isTierSteppedDown = steppedDown
+        guard target != activeTier else { return }
+
+        activeTier = target
+        applyShaderStack(
+            paths: shaderLibrary.shaderPaths(named: target.shaderFileNames),
+            scaleOptions: target.scaleOptions,
+            deband: false
+        )
+        budgetMonitor = GPUBudgetMonitor(sourceFPS: getDouble("container-fps"), displayFPS: displayRefreshRate)
+        logger.info("Render tier: \(target.displayName, privacy: .public) ratio=\(ratioText, privacy: .public) drawable=\(Int(self.drawableSize.width))x\(Int(self.drawableSize.height))")
+        updateBudgetSampling()
+    }
+
+    private func stepDownTier(reason: String) {
+        guard activeTier != .faithful else { return }
+        tierFloor = activeTier.steppedDown
+        logger.notice("Render tier \(self.activeTier.displayName, privacy: .public) stepped down: \(reason, privacy: .public)")
+        reselectTier()
+    }
+
+    private func handleShaderFailure() {
+        guard activeTier != .faithful else { return }
+        brokenTiers.insert(activeTier)
+        stepDownTier(reason: "libplacebo disabled a shader hook")
+    }
+
+    /// Samples once a second while a non-faithful tier is active.
+    private func updateBudgetSampling() {
+        guard activeTier != .faithful else {
+            budgetSampling?.cancel()
+            budgetSampling = nil
+            return
+        }
+        guard budgetSampling == nil else { return }
+        budgetSampling = Task { [weak self] in
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(1)) } catch { return }
+                guard let self else { return }
+                guard self.isPlaying, let sample = await self.readBudgetSample() else { continue }
+                if self.budgetMonitor.evaluate(sample) == .overBudget {
+                    self.stepDownTier(reason: "over GPU budget")
+                }
+            }
+        }
+    }
+
+    /// Reads on mpv's queue: `vo-passes` blocks until the VO thread answers,
+    /// which can take a whole frame under a heavy shader. The queue also
+    /// serializes the read with `destroy()`.
+    private nonisolated func readBudgetSample() async -> BudgetSample? {
+        await withCheckedContinuation { continuation in
+            queue.async { [weak self] in
+                guard let self, let mpv = self.mpv else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                var drops = Int64()
+                mpv_get_property(mpv, "frame-drop-count", MPV_FORMAT_INT64, &drops)
+                var timing: VOPassTiming?
+                if let raw = mpv_get_property_string(mpv, "vo-passes") {
+                    timing = VOPassTiming(json: String(cString: raw))
+                    mpv_free(raw)
+                }
+                continuation.resume(returning: BudgetSample(
+                    timing: timing,
+                    droppedFrames: Int(drops),
+                    uptime: ProcessInfo.processInfo.systemUptime
+                ))
+            }
         }
     }
 
@@ -1301,6 +1454,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     /// an external monitor running at 50.
     func applyDisplayRefreshRate(_ fps: Double) {
         guard fps > 0 else { return }
+        displayRefreshRate = fps
         setString("display-fps-override", String(format: "%.3f", fps))
     }
 

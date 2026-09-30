@@ -191,6 +191,9 @@ struct PlayerView: View {
                     speed: controller.currentPlaybackSpeed,
                     isReversing: controller.isReversing
                 )
+                if controller.useMPV, let mpvPlayer = controller.mpvPlayer {
+                    RenderTierBadge(player: mpvPlayer)
+                }
                 Spacer()
             }
             Spacer()

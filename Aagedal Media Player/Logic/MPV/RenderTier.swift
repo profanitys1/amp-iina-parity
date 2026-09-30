@@ -1,0 +1,81 @@
+// Aagedal Media Player
+// Copyright © 2026 Truls Aagedal
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+import CoreGraphics
+
+/// One rung of the automatic enhancement ladder, lightest first.
+///
+/// Used only while Enhance is on and the manual profile is Faithful. Costs
+/// below were measured on an M1 Pro, 720p fullscreen (2.69x), 24 fps source:
+/// SSimSuperRes 10.1 ms, RAVU zoom 9.3 ms, ArtCNN C4F16 12.0 ms, C4F32 28.2 ms
+/// per frame. The order follows image-quality intent, not cost. The GPU
+/// budget monitor corrects for cost at runtime.
+nonisolated enum RenderTier: Int, CaseIterable, Comparable, Sendable {
+    case faithful
+    case sharpen
+    case ravuZoom
+    case artcnnLight
+    case artcnnStrong
+
+    /// ArtCNN always emits exactly 2x. Below this ratio the overshoot would be
+    /// thrown away again by `dscale`, which costs GPU time for nothing.
+    static let neuralDoublerMinimumRatio = 1.9
+
+    static func < (lhs: RenderTier, rhs: RenderTier) -> Bool { lhs.rawValue < rhs.rawValue }
+
+    var displayName: String {
+        switch self {
+        case .faithful: "Faithful"
+        case .sharpen: "Sharpened"
+        case .ravuZoom: "RAVU zoom"
+        case .artcnnLight: "ArtCNN light"
+        case .artcnnStrong: "ArtCNN strong"
+        }
+    }
+
+    var shaderFileNames: [String] {
+        switch self {
+        case .faithful: []
+        case .sharpen: RenderProfile.sharpen.shaderFileNames
+        case .ravuZoom: ["ravu-zoom-ar-r3.hook"]
+        case .artcnnLight: ["ArtCNN_C4F16.glsl"]
+        case .artcnnStrong: ["ArtCNN_C4F32.glsl"]
+        }
+    }
+
+    var scaleOptions: [String: String] {
+        self == .sharpen ? RenderProfile.sharpen.scaleOptions : RenderProfile.off.scaleOptions
+    }
+
+    /// RAVU zoom renders at the target size, so it suits any upscale.
+    /// SSimSuperRes guards itself with `!WHEN` and only runs when upscaling.
+    func isEligible(ratio: Double) -> Bool {
+        switch self {
+        case .faithful: true
+        case .sharpen, .ravuZoom: ratio > 1.0
+        case .artcnnLight, .artcnnStrong: ratio >= Self.neuralDoublerMinimumRatio
+        }
+    }
+
+    var steppedDown: RenderTier { RenderTier(rawValue: rawValue - 1) ?? .faithful }
+}
+
+/// Picks a tier from the upscale ratio, what is installed, and how far the
+/// GPU monitor has forced the ladder down.
+nonisolated enum TierSelector {
+    /// Drawable pixels per source pixel on the tighter axis. `nil` until both
+    /// sizes are known.
+    static func upscaleRatio(source: CGSize, drawable: CGSize) -> Double? {
+        guard source.width > 0, source.height > 0, drawable.width > 0, drawable.height > 0 else { return nil }
+        return min(drawable.width / source.width, drawable.height / source.height)
+    }
+
+    /// The heaviest tier that is eligible for `ratio`, installed, and no
+    /// heavier than `floor`.
+    static func select(ratio: Double, available: Set<RenderTier>, floor: RenderTier) -> RenderTier {
+        RenderTier.allCases.reversed().first { tier in
+            tier <= floor && available.contains(tier) && tier.isEligible(ratio: ratio)
+        } ?? .faithful
+    }
+}

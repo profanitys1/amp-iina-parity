@@ -15,6 +15,8 @@ struct RenderSettingsView: View {
     private var renderProfileRaw = AppSettings.renderProfile.defaultValue
     @AppStorage(AppSettings.shaderDirectory.key)
     private var shaderDirectory = AppSettings.shaderDirectory.defaultValue
+    @AppStorage(AppSettings.enhance.key)
+    private var enhance = AppSettings.enhance.defaultValue
     @AppStorage(AppSettings.autoSelectSubtitles.key)
     private var autoSelectSubtitles = AppSettings.autoSelectSubtitles.defaultValue
 
@@ -32,7 +34,17 @@ struct RenderSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Shaders") {
+            Section("Enhancement") {
+                Toggle("Enhance", isOn: $enhance)
+                    .onChange(of: enhance) { _, newValue in
+                        NotificationCenter.default.post(.setEnhance(newValue))
+                    }
+                Text("Picks a sharpening or neural upscaling shader from how much the picture is enlarged, and steps down when the GPU cannot keep up. Enhancement alters the image; leave it off for inspection.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Advanced") {
                 Picker("Profile", selection: $renderProfileRaw) {
                     ForEach(RenderProfile.allCases) { candidate in
                         Text(candidate.displayName).tag(candidate.rawValue)
@@ -46,6 +58,12 @@ struct RenderSettingsView: View {
                 Text(profile.summary)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                if profile != .off {
+                    Text("A manual profile other than Faithful overrides Enhance.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
 
                 if !missingShaderNames.isEmpty {
                     Label(
@@ -88,7 +106,7 @@ struct RenderSettingsView: View {
             }
 
             Section("Heat") {
-                Text("Heavier profiles cost GPU time per frame. Chroma reconstruction is cheap at any resolution; the upscaling networks are sized for sub-4K and sub-1080p sources respectively.")
+                Text("Shaders cost GPU time per frame. With Enhance on, amp measures that cost while playing and drops to a lighter shader when a frame no longer fits.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

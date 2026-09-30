@@ -104,15 +104,26 @@ nonisolated struct ShaderLibrary: Sendable {
     /// stack still improves the picture, and mpv would otherwise abort the
     /// whole list on the first unreadable path.
     func shaderPaths(for profile: RenderProfile) -> [String] {
-        profile.shaderFileNames.compactMap { name in
+        shaderPaths(named: profile.shaderFileNames)
+    }
+
+    /// Shader names `profile` asks for that the directory does not contain.
+    func missingShaderNames(for profile: RenderProfile) -> [String] {
+        missingShaderNames(named: profile.shaderFileNames)
+    }
+
+    /// Existing paths for `names`, in the given order. Shared by the manual
+    /// profiles and the automatic tiers.
+    func shaderPaths(named names: [String]) -> [String] {
+        names.compactMap { name in
             let path = directory.appending(path: name).path(percentEncoded: false)
             return FileManager.default.fileExists(atPath: path) ? path : nil
         }
     }
 
-    /// Shader names `profile` asks for that the directory does not contain.
-    func missingShaderNames(for profile: RenderProfile) -> [String] {
-        profile.shaderFileNames.filter { name in
+    /// The subset of `names` the directory does not contain.
+    func missingShaderNames(named names: [String]) -> [String] {
+        names.filter { name in
             let path = directory.appending(path: name).path(percentEncoded: false)
             return !FileManager.default.fileExists(atPath: path)
         }

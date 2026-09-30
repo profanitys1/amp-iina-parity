@@ -59,6 +59,9 @@ nonisolated enum AppSettings {
     // Rendering
     static let renderProfile = AppSetting(key: "renderProfile", defaultValue: RenderProfile.off.rawValue)
     static let shaderDirectory = AppSetting(key: "shaderDirectory", defaultValue: "")
+    /// Picks a shader tier automatically from the upscale ratio and GPU
+    /// headroom. Off by default so the picture stays faithful to the source.
+    static let enhance = AppSetting(key: "enhance", defaultValue: false)
 
     // Control bar
     static let controlBarPositionHorizontal = AppSetting(
@@ -125,6 +128,7 @@ nonisolated enum AppSettings {
             playbackMuted.key: playbackMuted.defaultValue,
             renderProfile.key: renderProfile.defaultValue,
             shaderDirectory.key: shaderDirectory.defaultValue,
+            enhance.key: enhance.defaultValue,
             controlBarPositionHorizontal.key: controlBarPositionHorizontal.defaultValue,
             controlBarPositionVertical.key: controlBarPositionVertical.defaultValue,
             autoSelectSubtitles.key: autoSelectSubtitles.defaultValue,
