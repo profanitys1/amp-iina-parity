@@ -243,7 +243,7 @@ NEW_ITEM=$(cat <<EOF
             <pubDate>$PUB_DATE</pubDate>
             <sparkle:version>$CURRENT_PROJECT_VERSION</sparkle:version>
             <sparkle:shortVersionString>$MARKETING_VERSION</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:minimumSystemVersion>26.0</sparkle:minimumSystemVersion>
             <enclosure
                 url="$DOWNLOAD_URL"
                 length="$ZIP_SIZE"
