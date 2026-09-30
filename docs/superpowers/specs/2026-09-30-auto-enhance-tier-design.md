@@ -172,3 +172,53 @@ with a 120 Hz display.
 - Automatic CfL or KrigBilateral.
 - HDR/EDR colorspace work (`target-colorspace-hint`, `layer.colorspace`), which
   will get a separate spec.
+
+## Device results (2026-09-30)
+
+Performed by an agent on this Mac (M1 Pro, macOS 27.0.1). Fullscreen 16:9 video
+area is 3448×1940, so gaia.mov (1280×720) is 2.694×. Enhance on, profile
+Faithful. Numbers only; no frames were captured or viewed.
+
+### Fullscreen tier selection — PASS
+
+`Render tier: FSRCNNX ratio=2.694 drawable=3448x1940`
+
+FSRCNNX is the expected heaviest tier at 2.694× (≥ 1.9). No step-down within a
+22 s sampling window (FSRCNNX ≈ 16.1 ms against the 16.7 ms 30 fps budget).
+
+### Shader-failure path — PASS
+
+Shader folder pointed at a library copy whose FSRCNNX_x2_16-0-4-1.glsl is
+syntactically broken. Log order was exactly as designed:
+
+1. `Render tier: FSRCNNX ratio=2.694 drawable=3448x1940`
+2. `[mpv/vo/gpu-next/libplacebo] Failed executing hook, disabling`
+3. `Render tier FSRCNNX stepped down: libplacebo disabled a shader hook`
+4. `Render tier: ArtCNN light ratio=2.694 drawable=3448x1940`
+
+The broken tier stayed excluded and the ladder held at ArtCNN light (no
+oscillation).
+
+### Section 11 repeat — screenshot-raw byte-identity (three shaders)
+
+`screenshot-raw` was byte-identical with a shader loaded versus none, for
+ArtCNN_C4F16.glsl, ravu-zoom-ar-r3.hook and FSRCNNX_x2_16-0-4-1.glsl (md5
+`dd5c1bab228ea9f5abf9a58675166b73` in every case; 1280×720 bgr0). The
+measurement path stays faithful to the source for all three shaders.
+
+### Section 8 verification — container-fps at file-loaded
+
+`container-fps` reads 30.0 already at `file-loaded` (mpv 0.41.0 on gaia.mov and
+the synthetic ProRes clip), so the budget-monitor refresh in the FILE_LOADED
+block sees the correct frame rate.
+
+### Not yet performed (needs a human at the Mac)
+
+- Windowed playback at source resolution (ratio 1.0 → Faithful, badge hidden).
+- Leave-fullscreen-while-playing resize boundary; pause 10 s then resume.
+- ⌘I / Playlist glass panel open and close.
+- Picture-quality A/B (toggle Enhance off/on in the same scene).
+- HDR PQ visual check (section 10). The clip /tmp/amp-verify/hdr-test.mp4 is
+  hevc, yuv420p10le, smpte2084, bt2020, 1280×720, 30 fps. mpv discussion #14138
+  was checked first: the MoltenVK EDR/colorspace crash it references was fixed in
+  MoltenVK v1.3.0 (2025-05); amp pins MoltenVK 1.4.2, so the test is safe to run.
