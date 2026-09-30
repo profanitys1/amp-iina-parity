@@ -1504,6 +1504,157 @@ git add docs/superpowers/specs/2026-09-30-auto-enhance-tier-design.md
 git commit -m "docs: record on-device results for automatic render tiers"
 ```
 
-## Handoff note
+## Continuation guide (written 2026-09-30 for whoever picks this up)
 
-Code for Tasks 1–6 is on `main` (see Status). Next: a person runs Task 7. The MLX / Core ML upscaling idea (models from OpenModelDB and GitHub, benchmarked on gaia.mov) is a separate project. It needs its own brainstorm and spec before any plan, because running models per frame means a render path outside mpv's Vulkan output (see `.claude/worktrees/latest-releases-perf-video-11175f/docs/research/2026-09-12-upscaling-sub-1080p.md`).
+This section is the handoff. It lists the state, what is open, and how to reproduce every measurement. Everything here was verified on 2026-09-30 unless marked otherwise.
+
+### 1. State of the repository
+
+- Repo `/Users/filip/src/amp`, branch `main`, head `8d8384e` (unpushed). Xcode 27.0, Swift 6.4, macOS 27.0.1, Apple M1 Pro (14-core GPU, 32 GB).
+- Last full run: 635 passed, 0 failed, 5 skipped (read with `xcresulttool`, see "Commands used throughout"). Clean build: 0 warnings.
+- Uncommitted files that belong to the user, never stage them: `LICENSE` (deleted), `Aagedal Media Player Tests/CompareLiveBackendTests.swift`, `.omc/`.
+- Deployment target is macOS 26.0. `appcast.xml` still lists release 1.6.0 with `minimumSystemVersion` 15.0, which is correct for that shipped build. The next release must set 26.0 (the template comment already says so). macOS 15 users stop receiving Sparkle updates from that release on.
+- Extra git worktrees exist under `~/src/amp.agent-*` and `.claude/worktrees/`. They are not ours. Leave them.
+- `Test Fixtures/Generated/` is gitignored and only exists in the main checkout. Run tests there, never in a fresh worktree.
+
+### 2. What shipped, where it lives
+
+| File | Role |
+|---|---|
+| `Aagedal Media Player/Logic/MPV/RenderTier.swift` | `RenderTier` ladder (`faithful`, `sharpen`, `ravuZoom`, `artcnnLight`, `fsrcnnx`) and `TierSelector` |
+| `Aagedal Media Player/Logic/MPV/GPUBudgetMonitor.swift` | `VOPassTiming` (parses mpv `vo-passes` JSON), `BudgetSample`, `GPUBudgetMonitor` |
+| `Aagedal Media Player/Logic/MPV/MPVPlayer.swift` | tier selection, step-down, sampling loop, `setEnhanceEnabled` |
+| `Aagedal Media Player/Logic/MPV/MPVMetalLayer.swift` | `onDrawableSizeChange` callback |
+| `Aagedal Media Player/UI/RenderTierBadge.swift`, `RenderSettingsView.swift`, `PlayerView.swift` | badge, Enhance toggle, badge placement |
+| `Aagedal Media Player/ContentView.swift` | `inspectorPanel` (Liquid Glass card over the picture), gear calls `openSettings()` |
+| `Aagedal Media Player/Logic/SparkleUpdater.swift` | `SettingsWindow.openFromAppKit()` for the update alert |
+| `docs/superpowers/specs/2026-09-30-auto-enhance-tier-design.md` | design, "Verified facts" |
+| `docs/research/2026-09-30-gaia-upscaler-benchmark.md` | benchmark table |
+| `docs/research/2026-09-30-openmodeldb-model-survey.md` | OpenModelDB + GitHub survey (heuristic filter, see its header) |
+
+Behaviour in one paragraph: with Enhance on and the manual profile at Faithful, amp computes ratio = min(drawable/source) per axis. Tier rules: ratio ≤ 1.0 faithful; 1.0 < ratio < 1.9 RAVU zoom (else SSimSuperRes); ≥ 1.9 FSRCNNX. Once a second it reads mpv `vo-passes` and `frame-drop-count`. Over budget (sum of fresh-pass averages > 0.5 × frame period of the slower of source and display, or 3+ drops within 2 s) lowers the tier floor one step for the rest of the file. A shader libplacebo rejects is marked broken for the player's lifetime.
+
+### 3. Open work, in priority order
+
+1. **Task 7 (needs a person at the Mac).** Follow Task 7 above with gaia.mov. Expected on this Mac: FSRCNNX at fullscreen (ratio 2.694), about 16.1 ms of a 16.7 ms budget, so it may step down to ArtCNN light when the Mac is warm. Both outcomes are acceptable. Record results in the spec under "Device results".
+2. **Headroom of the FSRCNNX tier is thin (16.1 of 16.7 ms).** After Task 7, decide whether the budget fraction (0.5) or the tier order needs a tweak. Do not change it without the Task 7 logs.
+3. **RAVU zoom crashes FFmpeg's libplacebo filter** (exit code 139, no message) with `ravu-zoom-ar-r3.hook` via `/Users/filip/ffmpeg-apple-silicon/dist/9.0.1/full/ffmpeg`. mpv 0.41.0 runs the same file fine, so amp is not affected. Open question for the ffmpeg build repo (`/Users/filip/ffmpeg-apple-silicon`, libplacebo 7.360.1). Until fixed, RAVU zoom has a speed number (10.7 ms) but no quality score.
+4. **FSRCNNX licence and training data are not stated** in its repo. Check `https://github.com/igv/FSRCNN-TensorFlow` before shipping anything that bundles it. amp does not bundle shaders (users supply the folder), so this only matters for documentation.
+5. **Settings window stays opaque.** The user tried a see-through Settings window and rejected it ("not a good look"). The metadata/playlist panel is glass and was approved. Do not re-add glass to `SettingsView`.
+6. **Esc does not close the inspector.** An `.onExitCommand` was tried and removed because it did not fire in testing. ⌘I and the ✕ close it. Fixing Esc needs a key handler at the window level (`PlayerView.handleKeyEvent`).
+7. **Control bar is cramped with the glass panel open in small windows** (fullscreen button clipped in a 640-point window). Cosmetic, not started.
+8. **Better-than-shader quality needs a new project** (see section 5). Needs a brainstorm and a spec before any plan.
+
+### 4. How to reproduce the benchmark
+
+Needs: the ffmpeg build at `/Users/filip/ffmpeg-apple-silicon/dist/9.0.1/full/ffmpeg` (libplacebo 7.360.1, libvmaf), mpv at `/opt/homebrew/bin/mpv` 0.41.0, shaders in `~/.config/mpv/shaders`, `jq`, `gtimeout`. The ffmpeg libplacebo filter needs the Vulkan loader on the dyld path; the repo's own `tools/score_upscale.sh` does the same.
+
+**Privacy rule.** `/Users/filip/Downloads/Movies/gaia.mov` contains explicit personal content. Never extract, view or screenshot its frames, and never put frames in a report. Numbers only. For anything visual (UI work), use a synthetic clip with the same format:
+
+```bash
+ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=1280x720:rate=30 -t 120 -c:v prores_ks -profile:v 3 -pix_fmt yuv422p10le "$TMPDIR/testsrc-720p30-prores.mov"
+```
+
+**gaia.mov facts** (`ffprobe`): ProRes 422 HQ, 1280×720, 30 fps progressive, `yuv422p10le`, `smpte170m`, 137 Mbit/s, 468 s, AAC audio.
+
+**A. Quality: 2× reconstruction** (run in a scratch directory):
+
+```bash
+export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib
+FF=/Users/filip/ffmpeg-apple-silicon/dist/9.0.1/full/ffmpeg
+S=$HOME/.config/mpv/shaders
+"$FF" -hide_banner -loglevel error -y -ss 120 -i /Users/filip/Downloads/Movies/gaia.mov -t 10 -an -c:v ffv1 ref720.mkv
+"$FF" -hide_banner -loglevel error -y -i ref720.mkv -vf "scale=640:360:flags=bicubic" -c:v ffv1 lr360.mkv
+SHADER=ArtCNN_C4F16.glsl   # or none, FSRCNNX_x2_16-0-4-1.glsl, SSimSuperRes.glsl, ...
+A=":custom_shader_path=$S/$SHADER"; [ "$SHADER" = none ] && A=""
+"$FF" -hide_banner -loglevel error -y -init_hw_device vulkan -i lr360.mkv -vf "libplacebo=w=1280:h=720:upscaler=lanczos:format=yuv422p10le$A" -c:v ffv1 -level 3 -slicecrc 1 "up-$SHADER.mkv"
+"$FF" -hide_banner -loglevel error -i "up-$SHADER.mkv" -i ref720.mkv -lavfi "[0:v]setpts=PTS-STARTPTS,format=yuv420p[d];[1:v]setpts=PTS-STARTPTS,format=yuv420p[r];[d][r]libvmaf=log_fmt=json:log_path=v-$SHADER.json:feature=name=psnr|name=float_ssim" -f null -
+jq '{vmaf:.pooled_metrics.vmaf.mean, psnr_y:.pooled_metrics.psnr_y.mean, ssim:.pooled_metrics.float_ssim.mean, frames:(.frames|length)}' "v-$SHADER.json"
+```
+
+Gotchas found the hard way:
+- Put only one output stream in a command. A `filter_complex` that both upscales and feeds libvmaf failed with `Invalid argument`; render to a file first, score second.
+- Use `ffv1 -level 3 -slicecrc 1`. A plain ffv1 render of the FSRCNNX output had a corrupt frame (`bytestream end mismatching`) and gave a wrong score (98.031 instead of 98.492).
+- `frames` must equal 300. If it differs, discard the run.
+- Without `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib`, ffmpeg prints `Unable to open the libvulkan library!`.
+- Caveat: the test input is a synthetic bicubic downscale of the master, not a real 360p source. It ranks shaders; it does not prove how they look on real low-resolution video. VMAF rewards sharpening (ArtCNN C4F16 DS scored 99.995 with a lower SSIM than the neutral model), so judge by PSNR-Y and SSIM together.
+
+**B. Speed: real playback.** Save as `probe3.lua`:
+
+```lua
+local n = 0
+mp.add_periodic_timer(1, function()
+  n = n + 1
+  local j = mp.get_property_native("vo-passes")
+  local tot, minc = 0, 1e9
+  if j and j.fresh then for _, p in ipairs(j.fresh) do tot = tot + p.avg; if p.count < minc then minc = p.count end end end
+  if n >= 12 then print(string.format("RESULT total_ms=%.2f mincount=%d drops=%s hwdec=%s osd=%sx%s", tot/1e6, minc, mp.get_property("frame-drop-count"), mp.get_property("hwdec-current"), mp.get_property("osd-width"), mp.get_property("osd-height"))) end
+  if n == 15 then mp.command("quit") end
+end)
+```
+
+```bash
+S=$HOME/.config/mpv/shaders
+gtimeout 90 /opt/homebrew/bin/mpv --no-config --vo=gpu-next --gpu-api=vulkan --hwdec=videotoolbox --framedrop=vo --dscale=mitchell --cscale=spline36 --fs --start=120 --no-audio --script=probe3.lua --glsl-shaders="$S/ArtCNN_C4F16.glsl" /Users/filip/Downloads/Movies/gaia.mov 2>&1 | rg '^\[probe3\] RESULT' | tail -2
+```
+
+For `SSimSuperRes.glsl` add `--scale=ewa_lanczossharp --scaler-resizes-only=no`. The fullscreen drawable on this Mac is 3448×2164 (ratio 2.694 for 1280×720). `mincount=0` means one pass is never sampled (seen with FSRCNNX_x2_16; amp ignores such passes). The probe reads the screen mpv opens on, so run it with the display awake and no other GPU load.
+
+**C. Apple's built-in upscaler** (`VTLowLatencySuperResolutionScalerConfiguration`, probe compiled with `swiftc`):
+
+```swift
+import VideoToolbox
+typealias C = VTLowLatencySuperResolutionScalerConfiguration
+print("supported:", C.isSupported)
+print("720p factors:", C.supportedScaleFactors(frameWidth: 1280, frameHeight: 720))
+print("360p factors:", C.supportedScaleFactors(frameWidth: 640, frameHeight: 360))
+for f in C.supportedScaleFactors { print("factor", f, "maxDim", C.maximumDimension(forSpatialScaleFactor: f), "maxPixels", C.maximumPixelCount(forSpatialScaleFactor: f)) }
+```
+
+Result on this Mac: supported; 720p → [1.5]; 360p → [1.5, 2.0]; max source dimension 1280 at 1.5×, 960 at 2×, 480 at 4×. So a 720p source can only reach 1920×1080 with it, and it takes 8-bit 4:2:0 input only (from the SDK headers, `VTFrameProcessor_LowLatencySuperResolutionScaler.h`).
+
+### 5. Results to date (gaia.mov, 10 s from t = 120 s, 300 frames)
+
+| Shader | VMAF | PSNR-Y dB | SSIM | ms/frame fullscreen | drops |
+|---|---|---|---|---|---|
+| lanczos (Faithful) | 91.323 | 39.407 | 0.99910 | 5.8 | 0 |
+| ArtCNN_C4F16 | 98.879 | 43.151 | 0.99940 | 13.7 | 0 |
+| ArtCNN_C4F16_DS | 99.995 | 43.156 | 0.99863 | 13.8 | 0 |
+| ArtCNN_C4F16_DN | 93.081 | 41.420 | 0.99841 | not measured | — |
+| ArtCNN_C4F32 | 98.847 | 43.168 | 0.99939 | 39.1 | about 15/s |
+| FSRCNNX_x2_16-0-4-1 | 98.492 | 44.597 | 0.99956 | about 16.1 | 0 |
+| FSRCNNX_x2_8-0-4-1 | 97.184 | 42.807 | 0.99677 | 10.6 | 0 |
+| SSimSuperRes (+ ewa_lanczossharp) | 97.304 | 41.455 | 0.99891 | 11.2 | 0 |
+| ravu-zoom-ar-r3 | not scorable (ffmpeg crash) | — | — | 10.7 | 0 |
+
+The `_DS` and `_DN` ArtCNN variants are not in the ladder: DS sharpens (an enhancement, not a neutral reconstruction), DN softens.
+
+### 6. The neural-model project (not started; needs its own brainstorm and spec)
+
+The user wants amp to use MLX and Metal, modified mpv and ffmpeg, and models from OpenModelDB and GitHub. What is known:
+
+- **OpenModelDB survey** (`docs/research/2026-09-30-openmodeldb-model-survey.md`, produced by a subagent, claims cite sources, filter is heuristic: 246 of 671 records). No live-action-trained model is real-time here. Small RGB models (Compact, SPAN) need about 1.1 TFLOP per 720p frame against a budget of roughly 30–40 GFLOP (derived from ArtCNN C4F16's 12k parameters at 13.7 ms). `2xLiveActionV1_SPAN` is the best content match but licensed CC-BY-NC-SA-4.0, so offline use only. Transformer models (DAT, HAT, SwinIR) are far beyond budget. The only published Apple Silicon data point found was community/vendor: PiperSR (453k parameters, Neural Engine) 22.5 ms for 360p→720p on an M2 Max.
+- **No converter** from Compact/SPAN/RealPLKSR to mpv GLSL was found (GitHub code search returned nothing; read as "not found", not "does not exist").
+- **Installed on this Mac:** `mlx` 0.31.2, `coremltools` 9.0, `torch` 2.13 (MPS works), chaiNNer, Upscayl. The ffmpeg build has no DNN filters.
+- **Architecture constraint:** amp renders through mpv's Vulkan output via MoltenVK. Running a Core ML / MLX model per frame means either an ffmpeg filter (offline or pre-render) or a second render path beside mpv. The earlier 2026-09-12 research (`.claude/worktrees/latest-releases-perf-video-11175f/docs/research/2026-09-12-upscaling-sub-1080p.md`) reached the same conclusion for Apple's own scalers.
+- **Realistic options, ranked:** (a) offline pre-render of gaia.mov with a real model (quality ceiling, not real-time); (b) train a small ArtCNN-sized network on live-action data and export it as an mpv shader (the only way to get the right domain at real-time cost; needs training data that the user owns or licenses, and a chaiNNer/ArtCNN export path); (c) Apple's 1.5× scaler as a pre-stage before mpv's own 1.8× scale to the display (limits: 8-bit, 1.5×, unmeasured latency).
+- **Rule:** ask the user before downloading any model weights, and show sources, sizes and licences first.
+
+### 7. Facts and gotchas (all cost real time once)
+
+- Swift 6.4 isolation: with `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`, an `extension` of a `nonisolated` type still gets MainActor isolation. Write `nonisolated extension`. The compiler error reads "call to main actor-isolated initializer ... in a synchronous nonisolated context".
+- Count test results from the result bundle (`xcresulttool get test-results summary`), not by counting log lines: with parallel runners, log lines collide and a pass can go missing.
+- Swift Testing parameterized tests count once in `xcresulttool` but once per argument in the log, so the two counts differ (635 vs 650).
+- Test bundle codesign: a failed compile prints `code object is not signed at all` afterwards. That line is a consequence. Look for the compile `error:` above it.
+- `showSettingsWindow:` was removed in macOS 14. Use `@Environment(\.openSettings)`, or `SettingsWindow.openFromAppKit()` outside SwiftUI.
+- The moltenvk context in the MPVKit fork (`Sources/BuildScripts/patch/libmpv/0001-player-add-moltenvk-context.patch`, pinned at revision `230c317`) never emits a resize event, so `osd-width` is not reliable. `MPVMetalLayer.drawableSize`'s setter is the source of truth.
+- Reading `vo-passes` blocks until the VO thread answers: do it on `MPVPlayer.queue`, never on the main thread.
+- amp quits when its last window closes (setting `quitWhenNoOpenedWindow`, default true). A UI test run that closes the window ends the app.
+- UI tests with real clicks can change stored preferences. One test run muted playback (`playbackMuted`); check `defaults read com.aagedal.MediaPlayer` afterwards.
+- Known flaky tests: `CompareLiveBackendTests` live-decode cases fail intermittently on a deadline (see `docs/handoff-for-claude.md`, "Focus 1"). Re-run once; stop on any other failure.
+- Liquid Glass API: `glassEffect(_:in:)` is macOS 26+. The panel uses `.glassEffect(.clear.tint(.black.opacity(0.5)), in: .rect(cornerRadius: 18))` (the user asked for 50% more tint visibility than 0.35).
+- Git: no attribution lines in commit messages. Commit messages are plain. Stage files by exact path.
+
+### 8. Where to start
+
+1. Run Task 7 (a person). 2. Fix whatever it finds. 3. Commit the results doc. 4. Only then decide between item 8 in section 3 (neural-model project) and polish items 6–7. Do not start the neural-model project without a brainstorm.
