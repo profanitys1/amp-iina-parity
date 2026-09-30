@@ -87,7 +87,7 @@ with a 120 Hz display.
 
 ## Components
 
-1. **`RenderTier`** (in `Logic/MPV/RenderProfile.swift`). The ladder above as
+1. **`RenderTier`** (new, `Logic/MPV/RenderTier.swift`, alongside `TierSelector`). The ladder above as
    data: its shader file names, its `scaleOptions`, and its ratio predicate.
    `RenderProfile` is kept for the manual path. Tiers and profiles share
    `ShaderLibrary` to resolve paths.

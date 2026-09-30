@@ -18,6 +18,20 @@
 - Result: 0 errors and 0 warnings on a clean build.
 - Full suite: 649 passed, 0 failed, 5 skipped.
 
+## Status (2026-09-30): Tasks 1–6 are done; only Task 7 remains
+
+Tasks 1–6 were implemented and landed on `main`, verified with a clean build (0 warnings) and the full suite (634 passed, 0 failed, 5 skipped by `xcresulttool`):
+
+| Commit | Content |
+|---|---|
+| `1013b26` | Task 1: builds cleanly in Swift 6.4 mode |
+| `29322b0` | Tasks 2–6: tier ladder, selector, GPU budget monitor, drawable callback, MPVPlayer wiring, Enhance toggle, badge |
+| `2f0fc09` | Control-bar gear opens Settings (`openSettings()`; `showSettingsWindow:` was removed in macOS 14); Playlist button toggles; inspector ✕ |
+| `fbbf129` | Deployment target macOS 26.0 (`glassEffect` needs 26); `Text + Text` deprecation fixed |
+| `1beebdd` | Playlist/metadata panel floats over the picture as Liquid Glass (`.clear` tinted 50% black); ⌘I or ✕ closes it |
+
+Differences from the task text below: the deployment target is now 26.0, not 15.0, and the inspector is no longer a native `.inspector` column. The Tasks 1–6 sections are kept as the record of what landed. **Do not execute Preconditions or Tasks 1–6 again.** Only Task 7 remains, and it needs a person.
+
 ## How to execute this plan
 
 - Work in `/Users/filip/src/amp` on branch `main`. Do not create a worktree. The tests need `Test Fixtures/Generated/`, which is gitignored and exists only in that checkout.
@@ -56,6 +70,11 @@ grep -E '^\*\* BUILD (SUCCEEDED|FAILED) \*\*' "$TMPDIR/amp-build.log"
 grep -E '^/.*: (error|warning):' "$TMPDIR/amp-build.log" | grep -v SourcePackages | sort -u
 ```
 
+**Known flaky tests.** `docs/handoff-for-claude.md` ("Focus 1") records intermittent deadline failures in `CompareLiveBackendTests`. A different live-decode case fails each time, and each passes on its own. This plan does not touch that code. Apply this rule only to full-suite runs:
+- If every failed case listed by `grep "^Test case '.*' failed" "$TMPDIR/amp-test.log"` belongs to `CompareLiveBackendTests` and `** TEST FAILED **` is the only problem, run the full suite once more.
+- If the second run matches the Expected line, continue.
+- Stop on any other failure, or on a second failed run.
+
 Signing is ad hoc (`CODE_SIGN_IDENTITY=-`) because this Mac has no "Mac Development" certificate. If the test bundle fails to compile, the log also shows `Command CodeSign failed … code object is not signed at all`. That line is a consequence. Report the compile `error:` above it instead.
 
 ## Global Constraints
@@ -81,14 +100,25 @@ Signing is ad hoc (`CODE_SIGN_IDENTITY=-`) because this Mac has no "Mac Developm
 ```bash
 cd /Users/filip/src/amp
 git branch --show-current
-git log --oneline -1
+git status --short
 test -f "Test Fixtures/Generated/compare/source-a.mov" && echo fixtures-ok
 xcodebuild -version | head -1
 ```
 
-Expected, line by line:
+Expected:
 1. `main`
-2. the commit that adds this plan: `docs: add the auto-enhance tier plan` (see the handoff note at the end)
+2. Exactly these eight lines, in any order:
+   ```text
+    M "Aagedal Media Player Tests/CompareLiveBackendTests.swift"
+    M "Aagedal Media Player/Logic/AppSettings.swift"
+    M "Aagedal Media Player/Logic/ComparisonStillExporter.swift"
+    M "Aagedal Media Player/Logic/PlayerController+Observers.swift"
+    M "Aagedal Media Player/Logic/PlayerController.swift"
+    M "Aagedal Media Player/UI/PlayerOverlayViews.swift"
+    D LICENSE
+   ?? .omc/
+   ```
+   The first and the last two belong to the user. The other five are Task 1's edits.
 3. `fixtures-ok`
 4. `Xcode 27.0`
 
@@ -1384,78 +1414,83 @@ git commit -m "Add the Enhance toggle and the render tier badge"
 
 ---
 
-### Task 7: On-device verification (performed by a person)
+### Task 7: On-device verification with gaia.mov (performed by a person)
 
-This checks behaviour the unit tests cannot reach: `vo-passes` through the fork's `moltenvk` context, real resize events, and stepping down under load.
+This checks what the unit tests cannot reach: `vo-passes` through the fork's `moltenvk` context, real resize events, and stepping down under load, on the file the enhancement is for.
+
+**Test file:** `/Users/filip/Downloads/Movies/gaia.mov`. Verified with `ffprobe`: ProRes 422 HQ, 1280×720, 30 fps progressive, 10-bit 4:2:2 (`yuv422p10le`), SDR BT.601 (`smpte170m`), 137 Mbit/s, 468 s.
+
+**Expected cost on this Mac.** Measured on 2026-09-30 with `/opt/homebrew/bin/mpv` 0.41.0 / libplacebo 7.360.1 (the versions amp bundles), `--hwdec=videotoolbox --dscale=mitchell --cscale=spline36 --fs`. Fullscreen drawable 3448×2164, so the ratio is min(3448/1280, 2164/720) = 2.694. At 30 fps the budget is 0.5 × 1000/30 = 16.7 ms.
+
+| Tier | Shader | ms/frame | Drops | Fits 16.7 ms |
+|---|---|---|---|---|
+| Faithful | none | 5.8 | start-up only | yes |
+| RAVU zoom | `ravu-zoom-ar-r3.hook` | 10.7 | 0 | yes |
+| Sharpened | `SSimSuperRes.glsl` | 11.2 | 0 | yes |
+| ArtCNN light | `ArtCNN_C4F16.glsl` | 13.7 | 0 | yes |
+| ArtCNN strong | `ArtCNN_C4F32.glsl` | 39.1 | ~15/s | no |
 
 **Files:**
 - Modify: `docs/superpowers/specs/2026-09-30-auto-enhance-tier-design.md` (append "Device results")
 
-- [ ] **Step 1: Make the test media**
+- [ ] **Step 1: Build and launch**
 
 ```bash
-mkdir -p "$TMPDIR/amp-verify"
-ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=1920x1080:rate=24 -t 60 -pix_fmt yuv420p -c:v libx264 "$TMPDIR/amp-verify/t1080p24.mp4"
-ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=1280x720:rate=24 -t 60 -pix_fmt yuv420p -c:v libx264 "$TMPDIR/amp-verify/t720p24.mp4"
-ffmpeg -loglevel error -y -f lavfi -i testsrc2=size=1280x720:rate=60 -t 60 -pix_fmt yuv420p -c:v libx264 "$TMPDIR/amp-verify/t720p60.mp4"
-```
-
-- [ ] **Step 2: Build, start the log stream, launch the app**
-
-```bash
+cd /Users/filip/src/amp
 xcodebuild build -project "Aagedal Media Player.xcodeproj" -scheme "Aagedal Media Player" -destination platform=macOS CODE_SIGN_IDENTITY=- CODE_SIGNING_REQUIRED=NO DEVELOPMENT_TEAM=
 ```
 Expected: `** BUILD SUCCEEDED **`.
 
-In a second terminal:
+In a second terminal, start the log stream:
 
 ```bash
 log stream --level info --predicate 'subsystem == "com.aagedal.MediaPlayer" AND category == "MPVPlayer" AND (eventMessage CONTAINS "Render tier" OR eventMessage CONTAINS "mpv/vo")'
 ```
 
-Launch the build:
+Launch the build with gaia.mov:
 
 ```bash
-open "$(xcodebuild -project 'Aagedal Media Player.xcodeproj' -scheme 'Aagedal Media Player' -showBuildSettings 2>/dev/null | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{print $2}')/Aagedal Media Player.app"
+open -a "$(xcodebuild -project 'Aagedal Media Player.xcodeproj' -scheme 'Aagedal Media Player' -showBuildSettings 2>/dev/null | awk -F' = ' '/ BUILT_PRODUCTS_DIR /{print $2}')/Aagedal Media Player.app" /Users/filip/Downloads/Movies/gaia.mov
 ```
 
-Open Settings and go to the **Rendering** tab. Turn **Enhance** on and leave **Advanced → Profile** at **Faithful**.
+- [ ] **Step 2: Set the preferences**
+
+Open Settings (the gear in the control bar, or ⌘,), then the **Rendering** tab:
+1. Set **Advanced → Profile** to **Faithful**. The stored profile on this Mac is "Neural upscale — light", and a manual profile other than Faithful overrides Enhance.
+2. Turn **Enhance** on.
 
 - [ ] **Step 3: Check each case**
 
-Every tier change logs `Render tier: <name> ratio=<r> drawable=<w>x<h>`. Judge each case by the logged ratio, using the selection rules:
-- ratio ≤ 1.0 → Faithful
-- 1.0 < ratio < 1.9 → RAVU zoom
-- ratio ≥ 1.9 → ArtCNN strong, stepping down as the GPU requires
+Every tier change logs `Render tier: <name> ratio=<r> drawable=<w>x<h>`. The badge appears at the top left, next to the speed indicator.
 
-The expectations below come from standalone mpv measurements on this M1 Pro (spec, "Verified facts").
+| Case | Expected log | Expected badge |
+|---|---|---|
+| Play gaia.mov in its window | `ratio=` equals min(drawable width/1280, drawable height/720). Tier by the rules: ≤ 1.0 → none (Faithful); > 1.0 and < 1.9 → `RAVU zoom`; ≥ 1.9 → `ArtCNN strong`, then a step-down to `ArtCNN light` | hidden at Faithful, otherwise the tier name |
+| Fullscreen (ratio 2.694) | `Render tier: ArtCNN strong`, then within about 3 s `stepped down: over GPU budget`, then `Render tier: ArtCNN light`. No further lines while playing | "ArtCNN light · stepped down" |
+| Leave fullscreen while playing | One new `Render tier:` line about 300 ms after the resize ends, never heavier than ArtCNN light (the floor holds until the next file) | matches the logged tier |
+| Pause for 10 s, then resume | No step-down lines while paused | unchanged |
+| ⌘I, or the Playlist button | The glass panel appears over the picture; the ✕ and ⌘I close it | — |
 
-| Case | Expected |
-|---|---|
-| `t1080p24.mp4` in a window | Tier matches the logged ratio. At ratio ≤ 1.0 no tier line changes and there is no badge |
-| `t1080p24.mp4` fullscreen (fullscreen drawable measured 3448×2164, so ratio 1.796) | `Render tier: RAVU zoom` and badge "RAVU zoom". No step-down (9.3 ms against a 20.8 ms budget) |
-| `t720p24.mp4` fullscreen (ratio 2.694) | `ArtCNN strong`, then within about 3 s `stepped down: over GPU budget` and `ArtCNN light` (C4F32 28.2 ms against 20.8 ms; C4F16 12.0 ms fits). Badge "ArtCNN light · stepped down" |
-| `t720p60.mp4` fullscreen (ratio 2.694, budget 8.3 ms) | A chain of step-downs ending at `Faithful`, because every enhancing tier measured above 8.3 ms. Badge "Faithful · stepped down" |
-| Leave fullscreen while `t720p24.mp4` plays | One new `Render tier:` line about 300 ms after the resize ends. It is never heavier than ArtCNN light, because the floor holds until the next file |
-| Compare Mode with two files | Tier lines for each player. A badge in each panel that enhances |
-
-Pass: the tier sequence matches the table, and no tier is entered, stepped down from, and re-entered again for the same file (no oscillation).
+Pass: the sequence matches, and within one file no tier is entered, stepped down from, and entered again (no oscillation). Judge picture quality yourself by toggling Enhance off and on in the same scene.
 
 - [ ] **Step 4: Check the shader-failure path**
 
 ```bash
 mkdir -p "$TMPDIR/amp-verify/shaders"
 cp ~/.config/mpv/shaders/SSimSuperRes.glsl ~/.config/mpv/shaders/ArtCNN_C4F16.glsl ~/.config/mpv/shaders/ArtCNN_C4F32.glsl "$TMPDIR/amp-verify/shaders/"
-printf '//!HOOK LUMA\n//!BIND HOOKED\nvec4 hook() { return syntax error }\n' > "$TMPDIR/amp-verify/shaders/ravu-zoom-ar-r3.hook"
+printf '//!HOOK LUMA\n//!BIND HOOKED\nvec4 hook() { return syntax error }\n' > "$TMPDIR/amp-verify/shaders/ArtCNN_C4F16.glsl"
 echo "$TMPDIR/amp-verify/shaders"
 ```
 
-In Settings → Rendering → Shader Folder, click **Choose…** and pick the printed folder. Play `t1080p24.mp4` fullscreen.
+In Settings → Rendering → Shader Folder, click **Choose…** and pick the printed folder. Play gaia.mov fullscreen.
 
 Expected log, in order:
-1. `[mpv/vo/gpu-next/libplacebo] Failed executing hook, disabling`
-2. `stepped down: libplacebo disabled a shader hook`
-3. `Render tier: Sharpened`
+1. `Render tier: ArtCNN strong`
+2. a step-down over budget
+3. `Render tier: ArtCNN light`
+4. `[mpv/vo/gpu-next/libplacebo] Failed executing hook, disabling`
+5. `stepped down: libplacebo disabled a shader hook`
+6. `Render tier: Sharpened` (RAVU zoom is not in this folder, so it counts as unavailable)
 
 Afterwards, click **Reset** in Shader Folder.
 
@@ -1468,8 +1503,6 @@ git add docs/superpowers/specs/2026-09-30-auto-enhance-tier-design.md
 git commit -m "docs: record on-device results for automatic render tiers"
 ```
 
----
-
 ## Handoff note
 
-The plan and the updated spec are committed together in `docs: add the auto-enhance tier plan`. Precondition P1 checks for that commit. Task 1's five edits are deliberately left uncommitted in the working tree; Task 1 commits them.
+Code for Tasks 1–6 is on `main` (see Status). Next: a person runs Task 7. The MLX / Core ML upscaling idea (models from OpenModelDB and GitHub, benchmarked on gaia.mov) is a separate project. It needs its own brainstorm and spec before any plan, because running models per frame means a render path outside mpv's Vulkan output (see `.claude/worktrees/latest-releases-perf-video-11175f/docs/research/2026-09-12-upscaling-sub-1080p.md`).
