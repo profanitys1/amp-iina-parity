@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build & Run
 
-This is a macOS SwiftUI app (deployment target macOS 15.0) built with Xcode. The project file is at `Aagedal Media Player.xcodeproj`.
+This is a macOS SwiftUI app (deployment target macOS 26.0) built with Xcode. The project file is at `Aagedal Media Player.xcodeproj`.
 
 ```bash
 # Build from command line

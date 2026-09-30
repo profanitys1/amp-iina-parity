@@ -120,9 +120,7 @@ private struct FallbackUpdateControls: View {
     var body: some View {
         LabeledContent("Last Checked") {
             if let date = checker.lastChecked {
-                Text(date, style: .relative)
-                    .foregroundStyle(.secondary)
-                + Text(" ago")
+                Text("\(date, style: .relative) ago")
                     .foregroundStyle(.secondary)
             } else {
                 Text("Never")

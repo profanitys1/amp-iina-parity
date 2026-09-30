@@ -156,7 +156,7 @@ scripts/check-itu-seven-point-one-loudness.sh /tmp/new-itu-7-1-results /path/to/
 See [official programme references](docs/AUDIO_PROGRAMME_REFERENCES.md) for
 source downloads, expected values, and the distinction from live-meter validation.
 
-Release builds support Apple Silicon (`arm64`) on macOS 15 or later. Maintainer
+Release builds support Apple Silicon (`arm64`) on macOS 26 or later. Maintainer
 preflight, signing, architecture, entitlement, and ffmpeg provenance guidance is
 in [docs/RELEASE.md](docs/RELEASE.md).
 

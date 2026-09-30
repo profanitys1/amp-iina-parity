@@ -2,7 +2,7 @@
 
 Aagedal Media Player releases are intentionally Apple-Silicon-only. The app
 target, release archive, MPVKit dependency set, and bundled ffmpeg executable
-are built for `arm64`; macOS 15.0 is the minimum supported system. Supporting
+are built for `arm64`; macOS 26.0 is the minimum supported system. Supporting
 Intel would require universal builds of every native dependency and dedicated
 playback, signing, and performance validation, so changing this policy is a
 release-level decision rather than an `ARCHS` toggle.

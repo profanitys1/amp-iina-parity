@@ -16,7 +16,7 @@
               - <pubDate>           — RFC 822 date (`date "+%a, %d %b %Y %H:%M:%S %z"`)
               - <sparkle:version>             — CFBundleVersion (build number)
               - <sparkle:shortVersionString>  — CFBundleShortVersionString
-              - <sparkle:minimumSystemVersion> — macOS minimum (15.0)
+              - <sparkle:minimumSystemVersion> — macOS minimum (26.0 from the release after 1.6.0; 1.6.0 itself runs on 15.0)
               - <enclosure>:
                   url           — download URL of the signed .zip
                   length        — file size in bytes
