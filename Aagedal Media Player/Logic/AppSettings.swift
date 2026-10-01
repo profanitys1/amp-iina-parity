@@ -120,9 +120,34 @@ nonisolated enum AppSettings {
     static let updateCheckInterval = AppSetting(key: "updateCheckInterval", defaultValue: 7.0 * 24 * 3_600)
     static let didShowAutoUpdateNotice = AppSetting(key: "didShowAutoUpdateNotice", defaultValue: false)
 
+    /// Settings whose default is nil, which `register(defaults:)` cannot hold.
+    static let unregisteredKeys = [screenshotSaveDirectory.key, trimSaveDirectory.key, updateLastChecked.key]
+
+    /// Every stored key, for coverage checks.
+    static var allKeys: [String] { Array(defaultsDictionary.keys) + unregisteredKeys }
+
     static func registerDefaults(in defaults: UserDefaults = .standard) {
-        defaults.register(defaults: [
+        defaults.register(defaults: defaultsDictionary)
+    }
+
+    /// One dictionary feeds both registration and `allKeys`, so they cannot drift.
+    static var defaultsDictionary: [String: Any] {
+        [
             allowMultipleWindows.key: allowMultipleWindows.defaultValue,
+            preventDisplaySleep.key: preventDisplaySleep.defaultValue,
+            quitWhenNoOpenedWindow.key: quitWhenNoOpenedWindow.defaultValue,
+            audioPassthroughCodecs.key: audioPassthroughCodecs.defaultValue,
+            replayGainMode.key: replayGainMode.defaultValue,
+            replayGainPreamp.key: replayGainPreamp.defaultValue,
+            replayGainClip.key: replayGainClip.defaultValue,
+            replayGainFallback.key: replayGainFallback.defaultValue,
+            gaplessAudio.key: gaplessAudio.defaultValue,
+            forceAVFoundationOutput.key: forceAVFoundationOutput.defaultValue,
+            videoDecodeThreads.key: videoDecodeThreads.defaultValue,
+            audioDecodeThreads.key: audioDecodeThreads.defaultValue,
+            preferredAudioLanguages.key: preferredAudioLanguages.defaultValue,
+            demuxerMaxBytes.key: demuxerMaxBytes.defaultValue,
+            demuxerReadaheadSeconds.key: demuxerReadaheadSeconds.defaultValue,
             syncPlaybackControls.key: syncPlaybackControls.defaultValue,
             didShowCompareModeCallout.key: didShowCompareModeCallout.defaultValue,
             precisionScrubFactor.key: precisionScrubFactor.defaultValue,
@@ -169,7 +194,7 @@ nonisolated enum AppSettings {
             automaticAudioOnlyWaveform.key: automaticAudioOnlyWaveform.defaultValue,
             updateCheckInterval.key: updateCheckInterval.defaultValue,
             didShowAutoUpdateNotice.key: didShowAutoUpdateNotice.defaultValue,
-        ])
+        ]
     }
 }
 

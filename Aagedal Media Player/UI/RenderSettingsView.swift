@@ -19,6 +19,12 @@ struct RenderSettingsView: View {
     private var enhance = AppSettings.enhance.defaultValue
     @AppStorage(AppSettings.autoSelectSubtitles.key)
     private var autoSelectSubtitles = AppSettings.autoSelectSubtitles.defaultValue
+    @AppStorage(AppSettings.hdrEnabled.key)
+    private var hdrEnabled = AppSettings.hdrEnabled.defaultValue
+    @AppStorage(AppSettings.loadDisplayICCProfile.key)
+    private var loadDisplayICCProfile = AppSettings.loadDisplayICCProfile.defaultValue
+    @AppStorage(AppSettings.toneMappingTargetPeakOverride.key)
+    private var targetPeakOverride = AppSettings.toneMappingTargetPeakOverride.defaultValue
 
     private var profile: RenderProfile {
         RenderProfile(rawValue: renderProfileRaw) ?? .off
@@ -94,6 +100,18 @@ struct RenderSettingsView: View {
                 }
 
                 Text("Defaults to ~/.config/mpv/shaders so an existing mpv shader library works unchanged.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Colour") {
+                Toggle("Show HDR as HDR", isOn: $hdrEnabled)
+                Toggle("Use the Display's Colour Profile for SDR", isOn: $loadDisplayICCProfile)
+                Stepper(targetPeakOverride == 0
+                        ? "HDR Peak: From Display"
+                        : "HDR Peak: \(targetPeakOverride) nits",
+                        value: $targetPeakOverride, in: 0...10_000, step: 100)
+                Text("HDR needs PQ or HLG with BT.2020 or Display P3 primaries, and a display with EDR headroom. Changes apply the next time a file is opened.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

@@ -119,6 +119,9 @@ struct SettingsView: View {
             GeneralSettingsView()
                 .tabItem { Label("General", systemImage: "gear") }
 
+            PlaybackSettingsView()
+                .tabItem { Label("Playback", systemImage: "play.circle") }
+
             ScreenshotSettingsView()
                 .tabItem { Label("Screenshots", systemImage: "camera") }
 
