@@ -62,6 +62,10 @@ nonisolated enum AppSettings {
     /// Picks a shader tier automatically from the upscale ratio and GPU
     /// headroom. Off by default so the picture stays faithful to the source.
     static let enhance = AppSetting(key: "enhance", defaultValue: false)
+    static let hdrEnabled = AppSetting(key: "hdrEnabled", defaultValue: true)
+    static let loadDisplayICCProfile = AppSetting(key: "loadDisplayICCProfile", defaultValue: true)
+    /// 0 means derive the peak from the display's EDR headroom.
+    static let toneMappingTargetPeakOverride = AppSetting(key: "toneMappingTargetPeakOverride", defaultValue: 0)
 
     // Control bar
     static let controlBarPositionHorizontal = AppSetting(
@@ -129,6 +133,9 @@ nonisolated enum AppSettings {
             renderProfile.key: renderProfile.defaultValue,
             shaderDirectory.key: shaderDirectory.defaultValue,
             enhance.key: enhance.defaultValue,
+            hdrEnabled.key: hdrEnabled.defaultValue,
+            loadDisplayICCProfile.key: loadDisplayICCProfile.defaultValue,
+            toneMappingTargetPeakOverride.key: toneMappingTargetPeakOverride.defaultValue,
             controlBarPositionHorizontal.key: controlBarPositionHorizontal.defaultValue,
             controlBarPositionVertical.key: controlBarPositionVertical.defaultValue,
             autoSelectSubtitles.key: autoSelectSubtitles.defaultValue,

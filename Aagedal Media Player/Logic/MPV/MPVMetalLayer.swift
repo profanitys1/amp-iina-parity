@@ -11,20 +11,30 @@ class MPVMetalLayer: CAMetalLayer {
 
     nonisolated override init() {
         super.init()
-        configureForHDR()
     }
 
     nonisolated override init(layer: Any) {
         super.init(layer: layer)
-        configureForHDR()
     }
 
     nonisolated required init?(coder: NSCoder) {
         super.init(coder: coder)
-        configureForHDR()
     }
 
-    private nonisolated func configureForHDR() {
+    /// Applies a colour decision. SDR content gets the display's own colour
+    /// space and no EDR; HDR content gets a PQ space and EDR. Forcing EDR on
+    /// for everything, as this layer used to, shows SDR material through an
+    /// extended-range path it was never graded for.
+    nonisolated func apply(_ state: DisplayColorState, sdrColorSpace: CGColorSpace) {
+        guard state.usesEDR else {
+            colorspace = sdrColorSpace
+            wantsExtendedDynamicRangeContent = false
+            return
+        }
+        let name: CFString = state.targetPrimaries == "display-p3"
+            ? CGColorSpace.displayP3_PQ
+            : CGColorSpace.itur_2100_PQ
+        colorspace = CGColorSpace(name: name)
         wantsExtendedDynamicRangeContent = true
     }
 

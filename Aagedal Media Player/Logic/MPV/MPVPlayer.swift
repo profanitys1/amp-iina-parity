@@ -1428,7 +1428,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         return true
     }
 
-    private func getDouble(_ name: String) -> Double {
+    func getDouble(_ name: String) -> Double {
         guard mpv != nil else { return 0.0 }
         var data = Double()
         mpv_get_property(mpv, name, MPV_FORMAT_DOUBLE, &data)
@@ -1454,7 +1454,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         mpv_set_property(mpv, name, MPV_FORMAT_INT64, &data)
     }
 
-    private func getString(_ name: String) -> String? {
+    func getString(_ name: String) -> String? {
         guard mpv != nil else { return nil }
         let cstr = mpv_get_property_string(mpv, name)
         defer { mpv_free(cstr) }
