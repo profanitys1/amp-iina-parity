@@ -298,3 +298,14 @@ Bisect with `git bisect` across recent commits, running only this test. Use the 
   - The inspector panel used `Color.black.opacity(0.85)`, so the video showed through.
   - `RenderTierBadge` keyed its opacity on Reduce Motion instead of Reduce Transparency.
   - Both are opaque now. Verified on device with the setting on, and reinstalled to `/Applications/amp.app`.
+
+### Clean-up pass (same day)
+
+- **`LICENSE`** restored; it had been deleted in the working tree, never committed.
+- **`CompareLiveBackendTests.swift`** temporary `waitUntil` timeout diagnostics stashed as `stash@{0}` ("WIP: waitUntil timeout diagnostics …"). Restore with `git stash pop`.
+- **Full suite** on `678fc34`: 652 passed, 5 skipped, 0 failed.
+- **`9e8e99f`:**
+  - The chroma tier is skipped when mpv reports a 4:4:4, RGB or grey pixel format (`TierSelector.hasFullResolutionChroma`). Verified on device: a ProRes 4444 clip shows no badge.
+  - CfL is removed from the ArtCNN and FSRCNNX tiers, because it would push gaia.mov past its 16.7 ms budget. RAVU (+0.9 ms) and Sharpened (+0.3 ms) keep it.
+- **Older plans** (read-only audit): 00 and 06 have landed. 01 (preferences/menus), 02 (colour pipeline), 03 (hwdec/filters), 04 (key bindings) and 05 (clock split) are not started.
+- **Not done, needs the owner:** a public release (`scripts/release.sh` notarizes and publishes an appcast update), and choosing which of plans 01–05 to run next.
