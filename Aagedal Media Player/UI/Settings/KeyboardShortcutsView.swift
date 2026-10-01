@@ -69,6 +69,24 @@ struct KeyboardShortcutsView: View {
                     ("\u{21E7}\u{2318}R", "Reload player"),
                     ("\u{2318},", "Settings"),
                 ])
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Customisation")
+                        .font(.headline)
+                    Text("The player keys above can be overridden in keybindings.json. Each entry maps a chord such as \"shift+i\" to an action name; an empty action makes the key do nothing. Keys the file does not mention keep their defaults. Binding a ⌘ chord here takes it away from the menu.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        Button("Create Bindings File") {
+                            try? KeyBindingStore.shared.writeDefaultFileIfMissing()
+                            NSWorkspace.shared.activateFileViewerSelecting([KeyBindingStore.shared.fileURL])
+                        }
+                        Button("Reload Bindings") {
+                            KeyBindingStore.shared.reload()
+                        }
+                    }
+                }
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
