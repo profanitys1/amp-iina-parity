@@ -18,6 +18,23 @@
 - `Speed Down` and `Speed Up` keep no keyboard shortcut. That gap is deliberate — a shortcut there collides with the `[`/`]` rate stepping in the key monitor.
 - Settings that are runtime state, not preferences, stay out of the UI: `playbackVolume`, `playbackMuted`, `controlBarPositionHorizontal`, `controlBarPositionVertical`, `didShowCompareModeCallout`, `didShowAutoUpdateNotice`, `updateLastChecked`.
 
+
+## Status (2026-10-01): Tasks 1 to 3 landed on `main`; Task 4 was already in place
+
+Commits `e2736e2`, `c8ee2c2` and `a4b54a6`. Full suite: 712 passed, 5 skipped, 0 failed.
+
+- **Task 1:** `SettingsMigration` runs at launch, before `registerDefaults`.
+- **Task 2:** the panes live in `UI/Settings/`. They are `internal`, not `private`, because `SettingsView` in another file has to reach them.
+- **Task 3:**
+  - The new Playback pane holds the 14 settings that had no control, plus `hardwareDecoder`.
+  - A new Colour section in Rendering holds `hdrEnabled`, `loadDisplayICCProfile` and `toneMappingTargetPeakOverride`.
+  - The 14 settings were not registered at all, so `defaultsDictionary` now includes them (same defaults, so no behaviour change).
+  - `SettingsCoverageTests.testEveryDeclaredSettingIsListed` parses `AppSettings.swift`, so a declared but unregistered key can no longer slip past the coverage test.
+  - Verified on device: the panes render, and with `preventDisplaySleep` on, playback holds `PreventUserIdleDisplaySleep`; with it off, no assertion.
+- **Task 4: not built.** Every item in the table already had the right `.disabled(...)` condition on `main` (Comparison Review Notes uses `isCompareModeActive != true`). A `MenuAvailability` type would only restate the same rules.
+
+The settings tab bar now overflows into a `»` menu (Audio, Shortcuts and Updates). It already did before this plan; the sidebar this plan defers is the fix when that becomes a problem.
+
 ---
 
 ## File Structure
