@@ -18,6 +18,21 @@
 - **This app embeds mpv with `wid=`, not the render API.** There is no render context, so `MPV_RENDER_PARAM_ICC_PROFILE` — the mechanism IINA uses — is unavailable. `icc-profile-auto` depends on that parameter and will not work here. The profile must be written to a file and passed as `icc-profile=<path>`.
 - Do not remove `target-colorspace-hint=yes` (`MPVPlayer.swift:271`). It is what signals the swapchain colour space under Vulkan/MoltenVK and has no IINA equivalent.
 
+
+## Status (2026-10-01): all five tasks landed on `main`
+
+Commits `259c936`, `c9d4a5b`, `3503760`, `1d14391` and `f7279f3`. Full suite: 684 passed, 5 skipped, 0 failed.
+
+Verified on device with the `colour` log category:
+- an SDR clip logs `EDR=false prim=auto trc=auto`;
+- a PQ/BT.2020 clip logs `EDR=true prim=bt.2020 trc=pq` once mpv reports the parameters, and renders.
+
+Two deliberate differences from the task text:
+- `DisplayColorState.decide` reuses `HDRTransferResolver` instead of comparing `"pq"`/`"hlg"` itself.
+- `screenshot-tag-colorspace` is left at mpv's default (`yes`). The plan turned it off for SDR, which would have stripped the colour tag from SDR screenshots. The `tagsScreenshotColorspace` field was therefore dropped.
+
+The three new settings (`hdrEnabled`, `loadDisplayICCProfile`, `toneMappingTargetPeakOverride`) have no UI yet; Plan 1 surfaces them.
+
 ---
 
 ## File Structure
