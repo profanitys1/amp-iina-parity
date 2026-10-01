@@ -10,7 +10,7 @@ import Foundation
 /// heavier profiles are worth spending only when the source actually needs the
 /// reconstruction. Shader files are not bundled — they are read from a user
 /// shader directory so the same library can be shared with a standalone mpv.
-nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable {
+nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable, Codable {
     case off
     case chroma
     case sharpen
