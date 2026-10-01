@@ -18,6 +18,11 @@ import CoreGraphics
 /// Every tier above Faithful also loads CfL_Prediction. It only runs when the
 /// chroma plane is smaller than luma (`!WHEN CHROMA.w LUMA.w <`), so it fixes
 /// 4:2:0 and 4:2:2 colour edges and does nothing on 4:4:4 or RGB sources.
+/// Its cost, measured 2026-10-01 with mpv 0.41 CLI (gpu-next/Vulkan,
+/// fullscreen on the 16" M1 Pro, 4:2:2 ProRes, wall time per frame incl. decode):
+/// 1080p source, RAVU zoom 18.6 -> 18.7 ms; 720p source, ArtCNN C4F16
+/// 22.6 -> 26.0 ms, FSRCNNX 28.9 -> 30.9 ms. The GPU budget monitor steps
+/// down if the extra pass costs frames.
 nonisolated enum RenderTier: Int, CaseIterable, Comparable, Sendable {
     case faithful
     case chroma
