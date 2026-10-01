@@ -18,6 +18,25 @@
 - **Speed Down and Speed Up must keep no shortcut.** That gap is deliberate: a binding there would collide with the monitor's `[`/`]` rate stepping.
 - Do not change `PlayerView.handleKeyEvent`'s evaluation order. Timeline focus, overlay focus and text-input checks run before any binding lookup and must keep doing so.
 
+
+## Status (2026-10-01): landed on `main`, with a safer lookup than the task text
+
+Commits `e467c4b`, `9033f53`, `29c2928`, `7244940` and `cf7974e`. Full suite: 736 passed, 5 skipped, 0 failed.
+
+**The main difference: overrides only.** The task text resolved every key through a table of exact chords. Today's compiled handler is looser than that table: Shift-P, Shift-F, `{`/`}`, Shift-J/K/L, Shift-Space and others all still act. Replacing the handler would have dropped those, against this plan's own "every current binding must survive" constraint. Instead:
+- `KeyBindingTable` holds only what `keybindings.json` says.
+- `PlayerView.handleKeyEvent` consults it first, after the focus guards. A chord the file names wins; `""` makes the key do nothing and pass through.
+- A chord the file does not name falls through to the unchanged compiled code.
+- `KeyBindingDefaults.table` remains the list of rebindable defaults, used to seed a new file.
+
+Other differences:
+- **Compare Mode's wipe:** it keeps `[`/`]` while wiping, before any override is consulted.
+- **Space:** it stays with a focused overlay control, as before.
+- **`KeyChord`:** it maps arrow keys with a switch, because `NSEvent.SpecialKey` is not Sendable.
+- **Testable lookup:** the lookup is the pure `PlayerKeyMap.userOverride(…table:)`, unit-tested without touching the real Application Support file.
+
+**Verified on device** with `{ "x": "togglePlayback", "p": "" }`: `x` toggled playback and `p` did nothing. The test file was removed afterwards.
+
 ---
 
 ## File Structure
