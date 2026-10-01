@@ -1301,8 +1301,13 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
            let ratio = TierSelector.upscaleRatio(source: source, drawable: drawableSize) {
             ratioText = String(format: "%.3f", ratio)
             let library = shaderLibrary
+            let fullChroma = TierSelector.hasFullResolutionChroma(
+                pixelFormat: getString("video-params/hw-pixelformat") ?? getString("video-params/pixelformat")
+            )
             let available = Set(RenderTier.allCases.filter { tier in
-                !brokenTiers.contains(tier) && library.missingShaderNames(named: tier.requiredShaderFileNames).isEmpty
+                !brokenTiers.contains(tier)
+                    && !(tier == .chroma && fullChroma)
+                    && library.missingShaderNames(named: tier.requiredShaderFileNames).isEmpty
             })
             target = TierSelector.select(ratio: ratio, available: available, floor: tierFloor)
             steppedDown = target < TierSelector.select(ratio: ratio, available: available, floor: .fsrcnnx)

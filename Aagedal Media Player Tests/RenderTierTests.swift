@@ -42,11 +42,22 @@ struct RenderTierTests {
         #expect(TierSelector.select(ratio: 0.5, available: [.faithful], floor: .fsrcnnx) == .faithful)
     }
 
-    @Test func everyEnhancingTierReconstructsChroma() {
-        for tier in RenderTier.allCases where tier != .faithful {
+    @Test(arguments: [
+        ("yuv420p", false), ("yuv422p10", false), ("nv12", false), ("p010", false),
+        ("p210", false), ("uyvy422", false), ("yuv410p", false), ("yuv420p16", false), (nil, false), ("", false),
+        ("yuv444p10", true), ("gbrp", true), ("rgb24", true), ("gray16", true), ("nv24", true),
+    ] as [(String?, Bool)])
+    func detectsSourcesWithNothingForCfLToDo(format: String?, full: Bool) {
+        #expect(TierSelector.hasFullResolutionChroma(pixelFormat: format) == full)
+    }
+
+    @Test func lightTiersReconstructChromaAndDoublersDoNot() {
+        for tier in [RenderTier.chroma, .sharpen, .ravuZoom] {
             #expect(tier.shaderFileNames.last == "CfL_Prediction.glsl", "\(tier)")
         }
-        #expect(RenderTier.faithful.shaderFileNames.isEmpty)
+        for tier in [RenderTier.faithful, .artcnnLight, .fsrcnnx] {
+            #expect(!tier.shaderFileNames.contains("CfL_Prediction.glsl"), "\(tier)")
+        }
     }
 
     @Test func ratioIsTheTighterAxis() throws {
