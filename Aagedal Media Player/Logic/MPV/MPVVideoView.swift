@@ -5,6 +5,7 @@
 import SwiftUI
 import AppKit
 import OSLog
+import Combine
 
 // Scaling-diagnostic logger. Used by MPVViewController, MPVPlayer's
 // video-params observer (which fires on a nonisolated mpv event loop),
@@ -22,6 +23,8 @@ final class MPVViewController: NSViewController {
     private var surfaceSize: CGSize
     private var hasAttachedDrawable = false
     private var metalLayer: MPVMetalLayer!
+    private var colorController: DisplayColorController?
+    private var gammaObservation: AnyCancellable?
 
     // nonisolated(unsafe) because we tear these down from `deinit` which runs
     // outside the main actor — matches the same pattern in WindowConfigurator.
@@ -32,6 +35,7 @@ final class MPVViewController: NSViewController {
     nonisolated(unsafe) private var didEndLiveResizeObserver: NSObjectProtocol?
     nonisolated(unsafe) private var didChangeScreenObserver: NSObjectProtocol?
     nonisolated(unsafe) private var screenParametersObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var colorSpaceObserver: NSObjectProtocol?
     private weak var observedWindow: NSWindow?
 
     /// Tracks the drawableSize we last observed in a viewDidLayout pass,
@@ -113,6 +117,7 @@ final class MPVViewController: NSViewController {
             didEndLiveResizeObserver,
             didChangeScreenObserver,
             screenParametersObserver,
+            colorSpaceObserver,
         ].compactMap({ $0 }) {
             NotificationCenter.default.removeObserver(token)
         }
@@ -159,6 +164,18 @@ final class MPVViewController: NSViewController {
         // viewDidLayout update drawableSize, and MoltenVK recreates the
         // swapchain to match.
         attachDrawableIfSized()
+
+        colorController = DisplayColorController(player: player, layer: metalLayer)
+        // mpv reports a file's colour parameters after it loads; that can flip
+        // the SDR/HDR decision.
+        gammaObservation = player.$videoGamma
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.colorController?.refresh(screen: self.view.window?.screen)
+                }
+            }
     }
 
     override func viewWillAppear() {
@@ -242,6 +259,7 @@ final class MPVViewController: NSViewController {
                 didEndLiveResizeObserver,
                 didChangeScreenObserver,
                 screenParametersObserver,
+            colorSpaceObserver,
             ].compactMap({ $0 }) {
                 NotificationCenter.default.removeObserver(token)
             }
@@ -252,10 +270,17 @@ final class MPVViewController: NSViewController {
             didEndLiveResizeObserver = nil
             didChangeScreenObserver = nil
             screenParametersObserver = nil
+            colorSpaceObserver = nil
             observedWindow = window
         }
         guard let window else { return }
 
+        colorSpaceObserver = NotificationCenter.default.addObserver(
+            forName: NSScreen.colorSpaceDidChangeNotification,
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyDisplayRefreshRate() }
+        }
         didChangeScreenObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didChangeScreenNotification,
             object: window, queue: .main
@@ -336,6 +361,7 @@ final class MPVViewController: NSViewController {
     private func applyDisplayRefreshRate() {
         guard let screen = view.window?.screen else { return }
         player.applyDisplayRefreshRate(Double(screen.maximumFramesPerSecond))
+        colorController?.refresh(screen: screen)
     }
 
     /// Trigger a Force Reload via the same `.reloadPlayer` command
