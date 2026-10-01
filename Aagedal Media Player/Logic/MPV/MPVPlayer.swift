@@ -99,6 +99,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     @Published private(set) var errorStage: PlaybackFailureStage = .loading
     @Published var videoGamma: String?
     @Published var videoSigPeak: Double = 1.0
+    @Published var videoBitrate: Int64 = 0
+    @Published var containerFPS: Double = 0
+    @Published var pixelFormat: String?
 
     /// The decoder mpv reports it is using. `nil` until a decoder is loaded.
     @Published private(set) var activeHardwareDecoder: String?
@@ -408,6 +411,11 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         mpv_observe_property(mpv, 0, MPVProperty.videoParamsGamma, MPV_FORMAT_STRING)
         mpv_observe_property(mpv, 0, MPVProperty.videoParamsSigPeak, MPV_FORMAT_DOUBLE)
         mpv_observe_property(mpv, 0, MPVProperty.hwdecCurrent, MPV_FORMAT_STRING)
+        // Bitrate tracking for enhancement suggestions
+        mpv_observe_property(mpv, 0, MPVProperty.videoBitrate, MPV_FORMAT_INT64)
+        mpv_observe_property(mpv, 0, MPVProperty.containerFPS, MPV_FORMAT_DOUBLE)
+        // Pixel format for enhancement suggestions
+        mpv_observe_property(mpv, 0, MPVProperty.videoParamsPixelFormat, MPV_FORMAT_STRING)
 
         wakeupContext = Unmanaged.passRetained(self).toOpaque()
         mpv_set_wakeup_callback(mpv, mpvWakeupCallback, wakeupContext)
@@ -953,6 +961,20 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                                let strPtr = UnsafePointer<UnsafeMutablePointer<CChar>>(OpaquePointer(property.data))?.pointee {
                                 let decoder = String(cString: strPtr)
                                 DispatchQueue.main.async { self.activeHardwareDecoder = decoder }
+                            }
+                        case MPVProperty.videoBitrate:
+                            if let value = UnsafePointer<Int64>(OpaquePointer(property.data))?.pointee {
+                                DispatchQueue.main.async { self.videoBitrate = value }
+                            }
+                        case MPVProperty.containerFPS:
+                            if let value = UnsafePointer<Double>(OpaquePointer(property.data))?.pointee {
+                                DispatchQueue.main.async { self.containerFPS = value }
+                            }
+                        case MPVProperty.videoParamsPixelFormat:
+                            if property.format == MPV_FORMAT_STRING,
+                               let strPtr = UnsafePointer<UnsafeMutablePointer<CChar>>(OpaquePointer(property.data))?.pointee {
+                                let format = String(cString: strPtr)
+                                DispatchQueue.main.async { self.pixelFormat = format }
                             }
                         default:
                             break

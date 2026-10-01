@@ -107,6 +107,31 @@ struct PlayerView: View {
             }
 
             playbackStateOverlay
+            
+            // Enhancement suggestion banner
+            if controller.useMPV, let mpvPlayer = controller.mpvPlayer {
+                let suggestion = EnhancementSuggestion.suggest(
+                    bitrate: mpvPlayer.videoBitrate,
+                    sourceSize: mpvPlayer.videoSourceSize,
+                    pixelFormat: mpvPlayer.pixelFormat
+                )
+                
+                if suggestion.shouldEnhance {
+                    EnhancementSuggestionView(
+                        suggestion: suggestion,
+                        onEnhance: {
+                            // TODO: Implement offline enhancement in Task 4
+                            print("Enhance requested - will be implemented in Task 4")
+                        },
+                        onDismiss: {
+                            // TODO: Add dismiss state in Task 4
+                            print("Enhancement suggestion dismissed")
+                        }
+                    )
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+                }
+            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
