@@ -17,6 +17,23 @@
 - **Do not break the reflection path.** `correctsReflection` couples two decisions: it forces `hwdec` from `videotoolbox` to `videotoolbox-copy` *and* installs `vf=lavfi=[vflip]`. The copy-back variant is required because a `vf` chain cannot operate on an opaque VideoToolbox surface. Any change that lets a filter be added at runtime must also force copy-back, or the picture goes black.
 - ProRes RAW never reaches mpv — `PlayerController` routes it to AVPlayer. Do not add ProRes RAW to any mpv codec list.
 
+
+## Status (2026-10-01): all five tasks landed on `main`
+
+Commits `0b15b5e`, `2808f92`, `65eceb6`, `8302b2d` and `b1b5c52`. Full suite: 704 passed, 5 skipped, 0 failed.
+
+Verified on device:
+- the launch log shows `Hardware decode support: av1=false prores=true vp9=true`, and `av1` is removed from `hwdec-codecs` on this M1 Pro;
+- a file whose display matrix is mirrored (`ffmpeg -display_hflip -i in.mov -c copy out.mov`) shows the same picture as ffmpeg's matrix-applied frame, neither upside down nor black.
+
+Differences from the task text:
+- `HardwareDecodeCapabilities` waits on a `DispatchGroup`. The plan waited on the `DispatchWorkItem` itself, which libdispatch aborts the second time ("A block object may not be waited for more than once").
+- `MPVVideoFilter` stores the rendered body directly, the simpler form the plan itself suggests, instead of the `replacingLavfiGraph` approach.
+- New types that run off the main thread are marked `nonisolated`, because the target's default actor isolation is MainActor.
+- The plan's ffmpeg command for a mirrored test file only flips pixels and produces no reflected matrix; use `-display_hflip` as above.
+
+`hardwareDecoder` has no UI yet; Plan 1 surfaces it.
+
 ---
 
 ## File Structure
