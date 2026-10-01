@@ -235,13 +235,31 @@ struct PlayerView: View {
             return false
         }
 
+        let isWipeMode = compareSession?.isActive == true && compareSession?.viewMode.isWipe == true
+
+        // The user's keybindings.json, if any, before the compiled keys. A
+        // chord it does not mention falls through unchanged. Space stays with
+        // a focused overlay control, exactly as the compiled branch below.
+        if !(characters == " " && isOverlayControlFocused),
+           let override = PlayerKeyMap.userOverride(
+               characters: characters, specialKey: specialKey, modifiers: modifiers,
+               isWipeMode: isWipeMode, table: KeyBindingStore.shared.table) {
+            switch override {
+            case .unbound:
+                return false
+            case .bound(let action):
+                perform(action)
+                return true
+            }
+        }
+
         // Character keys, decided once and before the comparison branch: the
         // rate, frame-step, pause and fullscreen keys belong to ordinary
         // playback too, and only the wipe takes `[`/`]` away while it shows.
         if let action = PlayerKeyMap.characterAction(
             characters,
             modifiers: modifiers,
-            isWipeMode: compareSession?.isActive == true && compareSession?.viewMode.isWipe == true
+            isWipeMode: isWipeMode
         ) {
             switch action {
             case .stepRate(let forward):
@@ -387,6 +405,31 @@ struct PlayerView: View {
         }
 
         return false
+    }
+
+    /// Does what the compiled branch for the same default key does.
+    private func perform(_ action: KeyBindingAction) {
+        switch action {
+        case .togglePlayback: NotificationCenter.default.post(.togglePlayback)
+        case .toggleFullscreen: NotificationCenter.default.post(.toggleFullscreen)
+        case .stepRateForward: NotificationCenter.default.post(.stepRate(forward: true))
+        case .stepRateBackward: NotificationCenter.default.post(.stepRate(forward: false))
+        case .stepFrameForward: NotificationCenter.default.post(.seekByFrames(1))
+        case .stepFrameBackward: NotificationCenter.default.post(.seekByFrames(-1))
+        case .reverse: NotificationCenter.default.post(.reverse)
+        case .fastForward: NotificationCenter.default.post(.fastForward)
+        case .slowReverse: NotificationCenter.default.post(.slowReverse)
+        case .slowForward: NotificationCenter.default.post(.slowForward)
+        case .setTrimIn: controller.setTrimIn()
+        case .clearTrimIn: controller.clearTrimIn()
+        case .jumpToTrimIn: if let inPoint = controller.trimIn { seek(to: inPoint) }
+        case .setTrimOut: controller.setTrimOut()
+        case .clearTrimOut: controller.clearTrimOut()
+        case .jumpToTrimOut: if let outPoint = controller.trimOut { seek(to: outPoint) }
+        case .clearAllTrim: controller.clearTrimPoints()
+        case .toggleCompareSource:
+            if let compareSession, compareSession.isActive { compareSession.togglePrimarySecondary() }
+        }
     }
 
     private func seek(to time: TimeInterval) {

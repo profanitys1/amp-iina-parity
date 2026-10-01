@@ -64,6 +64,23 @@ nonisolated enum PlayerKeyMap {
         }
     }
 
+    /// The user's override for this key, if their bindings file names one.
+    /// Compare Mode's wipe keeps `[`/`]` while wiping — it is modal, which a
+    /// flat table cannot express — so overrides never see those keys then.
+    static func userOverride(
+        characters: String,
+        specialKey: NSEvent.SpecialKey?,
+        modifiers: NSEvent.ModifierFlags,
+        isWipeMode: Bool,
+        table: KeyBindingTable
+    ) -> KeyBindingTable.Override? {
+        let isWipeKey = ["[", "]", "{", "}"].contains(characters)
+        if isWipeMode, isWipeKey { return nil }
+        guard let chord = KeyChord.from(characters: characters, specialKey: specialKey,
+                                        flags: modifiers) else { return nil }
+        return table.override(for: chord)
+    }
+
     // MARK: - Arrow keys
 
     /// What one arrow key asks for. Multi-window sync is a separate decision
