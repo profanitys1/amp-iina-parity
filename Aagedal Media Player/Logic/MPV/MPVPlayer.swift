@@ -217,6 +217,27 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     /// Every one of these is left at mpv's own default unless the user has
     /// changed the corresponding setting, so an untouched install behaves
     /// exactly as it did before these options existed.
+    /// Resolves the hwdec option. Reflection correction installs a video filter,
+    /// and a filter cannot operate on the opaque surface `videotoolbox` hands
+    /// back, so that case forces copy-back — except when the user has turned
+    /// hardware decoding off outright.
+    nonisolated static func hwdecOptionValue(preference: String, correctsReflection: Bool) -> String {
+        if preference == "no" { return "no" }
+        if correctsReflection { return "videotoolbox-copy" }
+        return preference == "videotoolbox-copy" ? "videotoolbox-copy" : "videotoolbox"
+    }
+
+    /// Removes codecs this Mac cannot hardware-decode from mpv's whitelist, so
+    /// mpv stops attempting a path that silently falls back.
+    private func applyCodecWhitelist() {
+        guard let current = getString("hwdec-codecs") else { return }
+        guard let narrowed = MPVCodecWhitelist.narrowed(current, isSupported: { codec in
+            HardwareDecodeCapabilities.shared.isSupported(mpvCodec: codec)
+        }) else { return }
+        logger.info("Narrowing hwdec-codecs from \(current, privacy: .public) to \(narrowed, privacy: .public)")
+        setString("hwdec-codecs", narrowed)
+    }
+
     private func applyAudioAndDecoderOptions() {
         let defaults = UserDefaults.standard
 
@@ -307,7 +328,10 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         checkError(mpv_set_option_string(mpv, "vo", "gpu-next"), context: "vo")
         checkError(mpv_set_option_string(mpv, "gpu-api", "vulkan"), context: "gpu-api")
         checkError(mpv_set_option_string(mpv, "gpu-context", "moltenvk"), context: "gpu-context")
-        checkError(mpv_set_option_string(mpv, "hwdec", correctsReflection ? "videotoolbox-copy" : "videotoolbox"), context: "hwdec")
+        let hwdec = Self.hwdecOptionValue(
+            preference: UserDefaults.standard.value(for: AppSettings.hardwareDecoder),
+            correctsReflection: correctsReflection)
+        checkError(mpv_set_option_string(mpv, "hwdec", hwdec), context: "hwdec")
         if correctsReflection {
             // A reflected matrix decomposes into the rotation MPV already
             // applies and a vertical flip in coded-raster coordinates. A video
@@ -360,6 +384,8 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             error = "MPV initialization failed: \(message)"
             return
         }
+
+        applyCodecWhitelist()
 
         // These values may have been assigned while load() was still pending,
         // before the drawable existed and mpv had an initialized context.

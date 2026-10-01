@@ -367,6 +367,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppSettings.registerDefaults()
+        HardwareDecodeCapabilities.shared.beginProbing()
         UpdateChecker.shared.checkIfNeeded()
         SparkleUpdater.shared.presentFirstLaunchNoticeIfNeeded()
         WelcomeWindowPresenter.shared.present = { [weak self] in self?.showWelcomeWindow() }
