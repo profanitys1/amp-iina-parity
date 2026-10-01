@@ -17,6 +17,8 @@ struct RenderSettingsView: View {
     private var shaderDirectory = AppSettings.shaderDirectory.defaultValue
     @AppStorage(AppSettings.enhance.key)
     private var enhance = AppSettings.enhance.defaultValue
+    @AppStorage(AppSettings.autoEnhanceEnabled.key)
+    private var autoEnhanceEnabled = AppSettings.autoEnhanceEnabled.defaultValue
     @AppStorage(AppSettings.autoSelectSubtitles.key)
     private var autoSelectSubtitles = AppSettings.autoSelectSubtitles.defaultValue
     @AppStorage(AppSettings.hdrEnabled.key)
@@ -48,6 +50,16 @@ struct RenderSettingsView: View {
                 Text("Picks a sharpening or neural upscaling shader from how much the picture is enlarged, and steps down when the GPU cannot keep up. Enhancement alters the image; leave it off for inspection.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                
+                Toggle("Auto-enhance low-bitrate videos", isOn: $autoEnhanceEnabled)
+                
+                Text("Automatically enhance videos with bitrate below 10 Mbit/s using AI upscaling. Enhanced versions are cached for future playback.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                
+                NavigationLink("Manage Enhanced Videos") {
+                    CacheManagementView(cache: EnhancementCache())
+                }
             }
 
             Section("Advanced") {
