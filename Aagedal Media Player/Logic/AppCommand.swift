@@ -60,6 +60,7 @@ enum AppCommand {
 
 extension Notification.Name {
     fileprivate static let appCommand = Notification.Name("com.aagedal.MediaPlayer.appCommand")
+    static let enhancementCompleted = Notification.Name("com.aagedal.MediaPlayer.enhancementCompleted")
 }
 
 extension Notification {

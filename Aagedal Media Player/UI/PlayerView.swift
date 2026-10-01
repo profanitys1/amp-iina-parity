@@ -24,6 +24,8 @@ struct PlayerView: View {
     @AppStorage(AppSettings.automaticAudioOnlyWaveform.key)
     private var automaticAudioOnlyWaveform = AppSettings.automaticAudioOnlyWaveform.defaultValue
 
+    @State private var enhancementSuggestionDismissed = false
+    
     /// Aspect ratio for the player view's `.aspectRatio(_:contentMode:)` modifier.
     ///
     /// Source priority:
@@ -109,28 +111,38 @@ struct PlayerView: View {
             playbackStateOverlay
             
             // Enhancement suggestion banner
-            if controller.useMPV, let mpvPlayer = controller.mpvPlayer {
+            if controller.useMPV, let mpvPlayer = controller.mpvPlayer, !enhancementSuggestionDismissed {
                 let suggestion = EnhancementSuggestion.suggest(
                     bitrate: mpvPlayer.videoBitrate,
                     sourceSize: mpvPlayer.videoSourceSize,
                     pixelFormat: mpvPlayer.pixelFormat
                 )
-                
+
                 if suggestion.shouldEnhance {
                     EnhancementSuggestionView(
                         suggestion: suggestion,
                         onEnhance: {
-                            // TODO: Implement offline enhancement in Task 4
-                            print("Enhance requested - will be implemented in Task 4")
+                            // Start enhancement process
+                            if let url = controller.currentVideoURL {
+                                Task {
+                                    await controller.loadVideo(url)
+                                }
+                            }
                         },
                         onDismiss: {
-                            // TODO: Add dismiss state in Task 4
-                            print("Enhancement suggestion dismissed")
+                            enhancementSuggestionDismissed = true
                         }
                     )
                     .transition(.move(edge: .top).combined(with: .opacity))
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 }
+            }
+            
+            // Enhancement progress indicator
+            if controller.isEnhancementInProgress {
+                EnhancementProgressView(progress: controller.enhancementProgress)
+                    .transition(.opacity)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
