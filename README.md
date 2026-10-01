@@ -186,13 +186,16 @@ For older reviews with rounded broadcast rates, use **Notes → Migrate Rounded
 Timebases…** to preview and save a corrected copy while keeping recorded frame
 numbers. Use **Open Notes Copy…** to reopen it in a later session.
 
-### Enhance (shader upscaling)
-Enhance (Settings → Rendering) picks a sharpening or neural upscaling shader
-tier automatically from how much the picture is enlarged, and steps down to a
-lighter tier when the GPU cannot keep up. A badge over the picture names the
-active tier. Shaders come only from your mpv shader folder
-(`~/.config/mpv/shaders`); nothing is bundled. Enhancement alters the image, so
-it is off by default and the default render path stays faithful to the source.
+### AI Video Enhancement
+
+amp includes AI-powered video enhancement for low-bitrate videos:
+
+- **Real-time shaders**: FSRCNNX, SSimSuperRes, RAVU for immediate quality improvement
+- **Offline diffusion**: Stream-DiffVSR for maximum quality on severely compressed videos
+- **Smart caching**: Enhanced versions stored for future playback
+- **Progressive enhancement**: Start playback immediately, enhance in background
+
+See [Enhancement Feature Documentation](docs/enhancement-feature.md) for details.
 
 ### Playlist and metadata panel
 ⌘I (or the Playlist button) floats a see-through Liquid Glass panel over the

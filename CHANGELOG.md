@@ -5,6 +5,14 @@ All notable changes to Aagedal Media Player.
 ## [1.6.1] — Unreleased
 
 ### Added
+- AI-powered video enhancement for low-bitrate videos (<10 Mbit/s)
+- Real-time shader enhancement (FSRCNNX, SSimSuperRes, RAVU) during playback
+- Offline diffusion-based enhancement using Stream-DiffVSR
+- Smart caching of enhanced videos with LRU eviction (50 GB limit)
+- Progressive enhancement: start playback immediately, enhance in background
+- Enhancement suggestion UI for low-bitrate/low-resolution videos
+- Cache management UI in Settings → Rendering
+- Auto-enhance setting for automatic background processing
 - An opt-in **Enhance** mode that picks a sharpening or neural upscaling shader tier from how much the picture is enlarged, steps down to a lighter tier when the GPU cannot keep up, and shows a badge naming the active tier. Shaders come only from the user's mpv shader folder; nothing is bundled, and the default render path stays faithful to the source.
 - A see-through Liquid Glass panel floating over the picture for the playlist and metadata, toggled with ⌘I or the Playlist button and closed with ⌘I or the ✕.
 - Bounded iXML recording labels and track metadata in classic big-endian RIFX files, with independent XML encoding validation.
