@@ -29,6 +29,7 @@ final class PlayerChromeBehaviourTests: XCTestCase {
     private nonisolated(unsafe) static var savedPositionHorizontal: Any?
     private nonisolated(unsafe) static var savedPositionVertical: Any?
     private nonisolated(unsafe) static var savedOpenAtSourceResolution: Any?
+    private nonisolated(unsafe) static var savedAutoSelectSubtitles: Any?
 
     override func setUp() {
         super.setUp()
@@ -251,12 +252,18 @@ final class PlayerChromeBehaviourTests: XCTestCase {
         // The window configurator would otherwise resize the hosting window to
         // the 320x180 fixture clip, leaving the chrome no room to differ.
         UserDefaults.standard.set(false, forKey: AppSettings.openAtSourceResolution.key)
+        // The subtitle test expects the shipped default; a developer who turned
+        // it off in the app would otherwise fail it.
+        savedAutoSelectSubtitles = UserDefaults.standard
+            .object(forKey: AppSettings.autoSelectSubtitles.key)
+        UserDefaults.standard.set(true, forKey: AppSettings.autoSelectSubtitles.key)
     }
 
     private nonisolated static func restorePositionKeys() {
         restore(savedPositionHorizontal, forKey: AppSettings.controlBarPositionHorizontal.key)
         restore(savedPositionVertical, forKey: AppSettings.controlBarPositionVertical.key)
         restore(savedOpenAtSourceResolution, forKey: AppSettings.openAtSourceResolution.key)
+        restore(savedAutoSelectSubtitles, forKey: AppSettings.autoSelectSubtitles.key)
     }
 
     private nonisolated static func restore(_ value: Any?, forKey key: String) {
