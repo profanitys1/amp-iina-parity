@@ -366,6 +366,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var initialWindowController = InitialWindowController()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Before registration, so migration sees only what the user stored.
+        SettingsMigration.migrate()
         AppSettings.registerDefaults()
         HardwareDecodeCapabilities.shared.beginProbing()
         UpdateChecker.shared.checkIfNeeded()
