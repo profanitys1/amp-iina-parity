@@ -332,12 +332,6 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             preference: UserDefaults.standard.value(for: AppSettings.hardwareDecoder),
             correctsReflection: correctsReflection)
         checkError(mpv_set_option_string(mpv, "hwdec", hwdec), context: "hwdec")
-        if correctsReflection {
-            // A reflected matrix decomposes into the rotation MPV already
-            // applies and a vertical flip in coded-raster coordinates. A video
-            // filter fixes the surface, scopes, and screenshots together.
-            checkError(mpv_set_option_string(mpv, "vf", "lavfi=[vflip]"), context: "display reflection")
-        }
 
         // Decoder-side dropping discards frames the inspector never shows and
         // never counts, and mpv documents `decoder` as "Not recommended". `vo`
@@ -386,6 +380,13 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         }
 
         applyCodecWhitelist()
+        if correctsReflection {
+            // A reflected matrix decomposes into the rotation mpv already
+            // applies and a vertical flip in coded-raster coordinates. The
+            // filter fixes the surface, the scopes and screenshots together.
+            setVideoFilter(.lavfi(label: Self.reflectionFilterLabel, graph: "vflip"),
+                           label: Self.reflectionFilterLabel)
+        }
 
         // These values may have been assigned while load() was still pending,
         // before the drawable existed and mpv had an initialized context.
@@ -708,6 +709,32 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     func setAudioChannelRouting(_ routing: AudioChannelRouting) {
         audioChannelRouting = routing
         applyAudioChannelRouting()
+    }
+
+    static let reflectionFilterLabel = "amp-reflection"
+
+    /// Labels currently installed in the video filter chain.
+    private var activeVideoFilterLabels: Set<String> = []
+
+    /// Installs or removes one labelled video filter. mpv keeps the rest of the
+    /// chain intact, so filters no longer have to be decided at startup.
+    ///
+    /// A filter cannot read the opaque surface `hwdec=videotoolbox` returns, so
+    /// anything that installs one must also be running copy-back — see
+    /// `hwdecOptionValue(preference:correctsReflection:)`.
+    func setVideoFilter(_ filter: MPVVideoFilter?, label: String) {
+        guard mpv != nil else { return }
+        if let filter {
+            if activeVideoFilterLabels.contains(label) {
+                command("vf", args: ["remove", "@\(label)"])
+            }
+            if command("vf", args: ["add", filter.filterString]) {
+                activeVideoFilterLabels.insert(label)
+            }
+        } else if activeVideoFilterLabels.contains(label),
+                  command("vf", args: ["remove", "@\(label)"]) {
+            activeVideoFilterLabels.remove(label)
+        }
     }
 
     private func applyAudioChannelRouting() {
