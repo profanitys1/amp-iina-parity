@@ -441,7 +441,7 @@ struct ContentView: View {
         .frame(width: 340)
         .background(
             RoundedRectangle(cornerRadius: 18)
-                .fill(reduceTransparency ? Color.black.opacity(0.85) : Color.clear)
+                .fill(reduceTransparency ? Color.black : Color.clear)
         )
         .modifier(GlassPanelModifier(reduceTransparency: reduceTransparency))
     }

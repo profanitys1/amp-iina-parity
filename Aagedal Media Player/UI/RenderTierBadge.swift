@@ -18,6 +18,8 @@ struct RenderTierBadge: View {
 
     @Environment(\.accessibilityReduceMotion)
     private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency)
+    private var reduceTransparency
 
     /// Nil when nothing alters the picture.
     private var label: String? {
@@ -39,7 +41,7 @@ struct RenderTierBadge: View {
             .padding(.vertical, 6)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.black.opacity(reduceMotion ? 0.85 : 0.75))
+                    .fill(Color.black.opacity(reduceTransparency ? 1 : 0.75))
             )
             .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
             .help(missingShaderNames.isEmpty
