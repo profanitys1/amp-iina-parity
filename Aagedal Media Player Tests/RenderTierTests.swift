@@ -7,8 +7,8 @@ struct RenderTierTests {
     private static let everyTier = Set(RenderTier.allCases)
 
     @Test(arguments: [
-        (0.5, RenderTier.faithful),
-        (1.0, .faithful),
+        (0.5, RenderTier.chroma),
+        (1.0, .chroma),
         (1.2, .ravuZoom),
         (1.57, .ravuZoom),
         (1.9, .fsrcnnx),
@@ -35,10 +35,18 @@ struct RenderTierTests {
         let withoutNeuralDoublers: Set<RenderTier> = [.faithful, .sharpen, .ravuZoom]
         #expect(TierSelector.select(ratio: 2.0, available: withoutNeuralDoublers, floor: .fsrcnnx) == .ravuZoom)
 
-        let withoutRAVU: Set<RenderTier> = [.faithful, .sharpen, .artcnnLight, .fsrcnnx]
+        let withoutRAVU: Set<RenderTier> = [.faithful, .chroma, .sharpen, .artcnnLight, .fsrcnnx]
         #expect(TierSelector.select(ratio: 1.2, available: withoutRAVU, floor: .fsrcnnx) == .sharpen)
 
         #expect(TierSelector.select(ratio: 2.0, available: [], floor: .fsrcnnx) == .faithful)
+        #expect(TierSelector.select(ratio: 0.5, available: [.faithful], floor: .fsrcnnx) == .faithful)
+    }
+
+    @Test func everyEnhancingTierReconstructsChroma() {
+        for tier in RenderTier.allCases where tier != .faithful {
+            #expect(tier.shaderFileNames.last == "CfL_Prediction.glsl", "\(tier)")
+        }
+        #expect(RenderTier.faithful.shaderFileNames.isEmpty)
     }
 
     @Test func ratioIsTheTighterAxis() throws {
@@ -57,7 +65,8 @@ struct RenderTierTests {
 
     @Test func stepsDownOneRungAndStopsAtFaithful() {
         #expect(RenderTier.fsrcnnx.steppedDown == .artcnnLight)
-        #expect(RenderTier.sharpen.steppedDown == .faithful)
+        #expect(RenderTier.sharpen.steppedDown == .chroma)
+        #expect(RenderTier.chroma.steppedDown == .faithful)
         #expect(RenderTier.faithful.steppedDown == .faithful)
     }
 

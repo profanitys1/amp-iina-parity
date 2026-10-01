@@ -14,8 +14,13 @@ import CoreGraphics
 /// 44.60 dB / 0.99956. ArtCNN C4F32 was dropped: 39.1 ms for no gain over
 /// C4F16 (43.17 dB / 0.99939). The GPU budget monitor corrects for cost at
 /// runtime.
+///
+/// Every tier above Faithful also loads CfL_Prediction. It only runs when the
+/// chroma plane is smaller than luma (`!WHEN CHROMA.w LUMA.w <`), so it fixes
+/// 4:2:0 and 4:2:2 colour edges and does nothing on 4:4:4 or RGB sources.
 nonisolated enum RenderTier: Int, CaseIterable, Comparable, Sendable {
     case faithful
+    case chroma
     case sharpen
     case ravuZoom
     case artcnnLight
@@ -30,6 +35,7 @@ nonisolated enum RenderTier: Int, CaseIterable, Comparable, Sendable {
     var displayName: String {
         switch self {
         case .faithful: "Faithful"
+        case .chroma: "Chroma reconstruction"
         case .sharpen: "Sharpened"
         case .ravuZoom: "RAVU zoom"
         case .artcnnLight: "ArtCNN light"
@@ -37,9 +43,19 @@ nonisolated enum RenderTier: Int, CaseIterable, Comparable, Sendable {
         }
     }
 
+    /// Shaders in load order. CfL rides along on every enhancing tier.
     var shaderFileNames: [String] {
+        self == .faithful || self == .chroma
+            ? requiredShaderFileNames
+            : requiredShaderFileNames + RenderProfile.chroma.shaderFileNames
+    }
+
+    /// The shaders that define the tier. A missing CfL only drops the chroma
+    /// pass from the luma tiers; it does not disqualify them.
+    var requiredShaderFileNames: [String] {
         switch self {
         case .faithful: []
+        case .chroma: RenderProfile.chroma.shaderFileNames
         case .sharpen: RenderProfile.sharpen.shaderFileNames
         case .ravuZoom: ["ravu-zoom-ar-r3.hook"]
         case .artcnnLight: ["ArtCNN_C4F16.glsl"]
@@ -53,9 +69,12 @@ nonisolated enum RenderTier: Int, CaseIterable, Comparable, Sendable {
 
     /// RAVU zoom renders at the target size, so it suits any upscale.
     /// SSimSuperRes guards itself with `!WHEN` and only runs when upscaling.
+    /// Chroma is upscaled to luma size at any ratio, so CfL always qualifies.
+    // ponytail: on 4:4:4 sources the badge still says "Chroma reconstruction"
+    // although CfL skips itself; gate on mpv's pixel format if that misleads.
     func isEligible(ratio: Double) -> Bool {
         switch self {
-        case .faithful: true
+        case .faithful, .chroma: true
         case .sharpen, .ravuZoom: ratio > 1.0
         case .artcnnLight, .fsrcnnx: ratio >= Self.neuralDoublerMinimumRatio
         }

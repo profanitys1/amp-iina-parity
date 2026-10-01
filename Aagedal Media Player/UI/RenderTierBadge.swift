@@ -4,7 +4,8 @@
 
 import SwiftUI
 
-/// Names the automatic shader tier while Enhance is changing the picture.
+/// Names the shaders changing the picture: a manual profile, or the
+/// automatic tier Enhance picked.
 struct RenderTierBadge: View {
     @ObservedObject var player: MPVPlayer
     @AppStorage(AppSettings.shaderDirectory.key)
@@ -18,14 +19,19 @@ struct RenderTierBadge: View {
     @Environment(\.accessibilityReduceMotion)
     private var reduceMotion
 
+    /// Nil when nothing alters the picture.
+    private var label: String? {
+        if player.renderProfile != .off { return player.renderProfile.displayName }
+        if player.isTierSteppedDown { return "\(player.activeTier.displayName) · stepped down" }
+        return player.activeTier != .faithful ? player.activeTier.displayName : nil
+    }
+
     var body: some View {
-        if player.activeTier != .faithful || player.isTierSteppedDown {
+        if let label {
             HStack(spacing: 4) {
                 Image(systemName: "wand.and.stars")
                     .font(.system(size: 14, weight: .semibold))
-                Text(player.isTierSteppedDown
-                     ? "\(player.activeTier.displayName) · stepped down"
-                     : player.activeTier.displayName)
+                Text(label)
                     .font(.system(size: 14, weight: .semibold))
             }
             .foregroundStyle(.white)
@@ -37,11 +43,11 @@ struct RenderTierBadge: View {
             )
             .shadow(color: .black.opacity(0.3), radius: 4, x: 0, y: 2)
             .help(missingShaderNames.isEmpty
-                  ? "Enhance is altering the picture."
+                  ? "Shaders are altering the picture."
                   : "Not in the shader folder: \(missingShaderNames.joined(separator: ", "))")
-            .accessibilityLabel("Enhancement: \(player.activeTier.displayName)")
+            .accessibilityLabel("Enhancement: \(label)")
             .accessibilityHint(missingShaderNames.isEmpty
-                               ? "Video is being upscaled using \(player.activeTier.displayName) shader"
+                               ? "Video is being processed with the \(label) shaders"
                                : "Some shaders are missing from the folder")
             .transition(.opacity.combined(with: .scale(scale: reduceMotion ? 1.0 : 0.95)))
         }

@@ -1137,7 +1137,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     // MARK: - Render Profile
 
     /// The shader stack currently applied to the render path.
-    private(set) var renderProfile: RenderProfile = .off
+    @Published private(set) var renderProfile: RenderProfile = .off
 
     /// The automatic tier in effect. `.faithful` whenever Enhance is off or a
     /// manual profile other than Faithful is chosen.
@@ -1302,7 +1302,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             ratioText = String(format: "%.3f", ratio)
             let library = shaderLibrary
             let available = Set(RenderTier.allCases.filter { tier in
-                !brokenTiers.contains(tier) && library.missingShaderNames(named: tier.shaderFileNames).isEmpty
+                !brokenTiers.contains(tier) && library.missingShaderNames(named: tier.requiredShaderFileNames).isEmpty
             })
             target = TierSelector.select(ratio: ratio, available: available, floor: tierFloor)
             steppedDown = target < TierSelector.select(ratio: ratio, available: available, floor: .fsrcnnx)

@@ -195,6 +195,7 @@ struct PlayerView: View {
                     RenderTierBadge(player: mpvPlayer)
                         .animation(.easeInOut(duration: 0.25), value: mpvPlayer.activeTier)
                         .animation(.easeInOut(duration: 0.25), value: mpvPlayer.isTierSteppedDown)
+                        .animation(.easeInOut(duration: 0.25), value: mpvPlayer.renderProfile)
                 }
                 Spacer()
             }
