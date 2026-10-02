@@ -111,7 +111,7 @@ struct PlayerView: View {
             playbackStateOverlay
             
             // Enhancement suggestion banner
-            if controller.useMPV, let mpvPlayer = controller.mpvPlayer, !enhancementSuggestionDismissed {
+            if controller.useMPV, let mpvPlayer = controller.mpvPlayer, mpvPlayer.renderProfile == .off, !enhancementSuggestionDismissed {
                 let suggestion = EnhancementSuggestion.suggest(
                     bitrate: mpvPlayer.videoBitrate,
                     sourceSize: mpvPlayer.videoSourceSize,
@@ -122,12 +122,10 @@ struct PlayerView: View {
                     EnhancementSuggestionView(
                         suggestion: suggestion,
                         onEnhance: {
-                            // Start enhancement process
-                            if let url = controller.currentVideoURL {
-                                Task {
-                                    await controller.loadVideo(url)
-                                }
-                            }
+                            // Apply the real-time shader profile; it takes effect on the
+                            // next frame and shows up in Settings → Rendering.
+                            NotificationCenter.default.post(.setRenderProfile(suggestion.recommendedProfile))
+                            enhancementSuggestionDismissed = true
                         },
                         onDismiss: {
                             enhancementSuggestionDismissed = true
@@ -138,12 +136,6 @@ struct PlayerView: View {
                 }
             }
             
-            // Enhancement progress indicator
-            if controller.isEnhancementInProgress {
-                EnhancementProgressView(progress: controller.enhancementProgress)
-                    .transition(.opacity)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)

@@ -48,6 +48,14 @@ struct MPVProperty {
     nonisolated static let videoParamsDw = "video-params/dw"
     nonisolated static let videoParamsDh = "video-params/dh"
     nonisolated static let videoParamsRotate = "video-params/rotate"
+    nonisolated static let videoParamsPixelFormat = "video-params/pixelformat"
+    nonisolated static let videoParamsHWPixelFormat = "video-params/hw-pixelformat"
+
+    // Bitrate tracking for enhancement suggestions.
+    // `video-bitrate` is the estimated video stream bitrate in bits/sec.
+    // `container-fps` is the container-reported frame rate.
+    nonisolated static let videoBitrate = "video-bitrate"
+    nonisolated static let containerFPS = "container-fps"
 
     // Audio
     nonisolated static let volume = "volume"

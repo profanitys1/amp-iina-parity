@@ -5,14 +5,9 @@ All notable changes to Aagedal Media Player.
 ## [1.6.1] — Unreleased
 
 ### Added
-- AI-powered video enhancement for low-bitrate videos (<10 Mbit/s)
-- Real-time shader enhancement (FSRCNNX, SSimSuperRes, RAVU) during playback
-- Offline diffusion-based enhancement using Stream-DiffVSR
-- Smart caching of enhanced videos with LRU eviction (50 GB limit)
-- Progressive enhancement: start playback immediately, enhance in background
-- Enhancement suggestion UI for low-bitrate/low-resolution videos
-- Cache management UI in Settings → Rendering
-- Auto-enhance setting for automatic background processing
+- A suggestion banner for low-bitrate or low-resolution videos that applies a real-time shader profile in one click
+- Render profiles for compressed 640p–1080p video: Efficient upscale (FSRCNNX + KrigBilateral), Compressed movie (hdeband + ArtCNN C4F16 DS + CfL), Compressed movie + grain, and Crisp (ArtCNN C4F16 DS + CfL + adaptive-sharpen).
+- Files start playing when opened (Settings → Start Playing When a File Opens).
 - An opt-in **Enhance** mode that picks a sharpening or neural upscaling shader tier from how much the picture is enlarged, steps down to a lighter tier when the GPU cannot keep up, and shows a badge naming the active tier. Shaders come only from the user's mpv shader folder; nothing is bundled, and the default render path stays faithful to the source.
 - A see-through Liquid Glass panel floating over the picture for the playlist and metadata, toggled with ⌘I or the Playlist button and closed with ⌘I or the ✕.
 - Bounded iXML recording labels and track metadata in classic big-endian RIFX files, with independent XML encoding validation.
@@ -103,6 +98,7 @@ All notable changes to Aagedal Media Player.
 - The README and the in-app key table now document the real bindings, including the `[`/`]` rate-versus-wipe precedence.
 
 ### Fixed
+- Entering fullscreen right after opening a file no longer leaves playback paused.
 - The Settings control-bar gear now opens the Settings window (⌘,), and the inspector's ✕ closes it again.
 - Prevent queued comparison-note saves from beginning after comparison mode closes or its source pair changes.
 - Focused comparison toolbar controls receive Space and arrow keys without triggering playback; compact settings scroll to keyboard-focused controls and show focus rings.

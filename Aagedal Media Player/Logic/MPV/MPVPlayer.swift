@@ -472,6 +472,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     }
 
     func play() {
+        // A play requested before MPV_EVENT_FILE_LOADED must not be undone
+        // by the deferred start-paused step.
+        startPaused = false
         setFlag(MPVProperty.pause, false)
     }
 
@@ -1036,6 +1039,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                         self.tierFloor = .fsrcnnx
                         self.reselectTier()
                         self.refreshBudgetMonitor()
+                        self.updateBudgetSampling()
                         if self.pendingSeekAfterLoad > 0 {
                             self.seek(to: self.pendingSeekAfterLoad)
                             self.pendingSeekAfterLoad = 0
@@ -1421,19 +1425,24 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         stepDownTier(reason: "libplacebo disabled a shader hook")
     }
 
-    /// Samples once a second while a non-faithful tier is active.
+    /// Samples once a second while a non-faithful tier or a manual profile is
+    /// active. Only tiers step down; manual profiles just log their GPU time
+    /// (`log stream --level debug --predicate 'category == "MPVPlayer"'`).
     private func updateBudgetSampling() {
-        guard activeTier != .faithful else {
+        guard activeTier != .faithful || renderProfile != .off else {
             budgetSampling?.cancel()
             budgetSampling = nil
             return
         }
         guard budgetSampling == nil else { return }
+        logger.debug("GPU sampling started")
         budgetSampling = Task { [weak self] in
             while !Task.isCancelled {
                 do { try await Task.sleep(for: .seconds(1)) } catch { return }
                 guard let self else { return }
                 guard self.isPlaying, let sample = await self.readBudgetSample() else { continue }
+                self.logger.debug("GPU \(self.renderProfile.rawValue, privacy: .public)/\(self.activeTier.displayName, privacy: .public): \(sample.timing?.totalMilliseconds ?? -1, format: .fixed(precision: 2), privacy: .public) ms samples=\(sample.timing?.minimumSampleCount ?? 0) drops=\(sample.droppedFrames) drawable=\(Int(self.drawableSize.width))x\(Int(self.drawableSize.height))")
+                guard self.activeTier != .faithful else { continue }
                 if self.budgetMonitor.evaluate(sample) == .overBudget {
                     self.stepDownTier(reason: "over GPU budget")
                 }

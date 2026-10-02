@@ -62,8 +62,6 @@ nonisolated enum AppSettings {
     /// Picks a shader tier automatically from the upscale ratio and GPU
     /// headroom. Off by default so the picture stays faithful to the source.
     static let enhance = AppSetting(key: "enhance", defaultValue: false)
-    /// Automatically enhance low-bitrate videos (<10 Mbit/s) using AI upscaling
-    static let autoEnhanceEnabled = AppSetting(key: "autoEnhanceEnabled", defaultValue: true)
     /// "auto", "videotoolbox", "videotoolbox-copy" or "no".
     static let hardwareDecoder = AppSetting(key: "hardwareDecoder", defaultValue: "auto")
     static let hdrEnabled = AppSetting(key: "hdrEnabled", defaultValue: true)
@@ -83,6 +81,8 @@ nonisolated enum AppSettings {
 
     // Subtitles
     static let autoSelectSubtitles = AppSetting(key: "autoSelectSubtitles", defaultValue: true)
+    /// Start playing as soon as a file is opened.
+    static let autoPlayOnOpen = AppSetting(key: "autoPlayOnOpen", defaultValue: true)
 
     // Screenshots and trim exports
     static let screenshotLocationMode = AppSetting(key: "screenshotLocationMode", defaultValue: "custom")
@@ -162,7 +162,6 @@ nonisolated enum AppSettings {
             renderProfile.key: renderProfile.defaultValue,
             shaderDirectory.key: shaderDirectory.defaultValue,
             enhance.key: enhance.defaultValue,
-            autoEnhanceEnabled.key: autoEnhanceEnabled.defaultValue,
             hardwareDecoder.key: hardwareDecoder.defaultValue,
             hdrEnabled.key: hdrEnabled.defaultValue,
             loadDisplayICCProfile.key: loadDisplayICCProfile.defaultValue,
@@ -170,6 +169,7 @@ nonisolated enum AppSettings {
             controlBarPositionHorizontal.key: controlBarPositionHorizontal.defaultValue,
             controlBarPositionVertical.key: controlBarPositionVertical.defaultValue,
             autoSelectSubtitles.key: autoSelectSubtitles.defaultValue,
+            autoPlayOnOpen.key: autoPlayOnOpen.defaultValue,
             screenshotLocationMode.key: screenshotLocationMode.defaultValue,
             screenshotFormat.key: screenshotFormat.defaultValue,
             trimLocationMode.key: trimLocationMode.defaultValue,

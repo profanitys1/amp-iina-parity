@@ -85,4 +85,12 @@ final class RenderProfileTests: XCTestCase {
             XCTAssertEqual(profile.enablesDeband, profile == .restore, "\(profile.rawValue)")
         }
     }
+
+    /// hdeband must run before any other shader and replaces mpv's deband.
+    func testHdebandRunsFirstWithBuiltInDebandOff() {
+        for profile in RenderProfile.allCases where profile.shaderFileNames.contains("hdeband.glsl") {
+            XCTAssertEqual(profile.shaderFileNames.first, "hdeband.glsl", "\(profile.rawValue)")
+            XCTAssertFalse(profile.enablesDeband, "\(profile.rawValue)")
+        }
+    }
 }

@@ -41,21 +41,21 @@ nonisolated enum EnhancementSuggestion {
             return Suggestion(
                 shouldEnhance: true,
                 reason: reason,
-                recommendedProfile: .upscaleLight
+                recommendedProfile: .compressed
             )
         } else if isLowBitrate {
             let reason = "Low bitrate (\(String(format: "%.1f", bitrateMBit)) Mbit/s) — enhancement may improve quality"
             return Suggestion(
                 shouldEnhance: true,
                 reason: reason,
-                recommendedProfile: .upscaleLight
+                recommendedProfile: .compressed
             )
         } else if isLowRes {
             let reason = "Low resolution — upscaling may improve sharpness"
             return Suggestion(
                 shouldEnhance: true,
                 reason: reason,
-                recommendedProfile: .upscaleLight
+                recommendedProfile: .compressed
             )
         } else {
             let reason = "High quality source — enhancement not needed"

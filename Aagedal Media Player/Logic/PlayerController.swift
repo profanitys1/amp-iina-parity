@@ -121,14 +121,6 @@ final class PlayerController: ObservableObject {
     }
     @Published var videoAspectRatio: CGFloat?
     @Published var videoSourceSize: NSSize?
-    
-    // Enhancement state
-    @Published var currentVideoURL: URL?
-    @Published var isEnhancementInProgress: Bool = false
-    @Published var enhancementProgress: Double = 0.0
-    private var enhancementCache: EnhancementCache?
-    private var diffusionEnhancer: DiffusionEnhancer?
-    private var enhancementTask: Task<Void, Never>?
 
     // Media operation state is owned by a focused coordinator. These computed
     // properties preserve the existing view-facing PlayerController API.
@@ -204,6 +196,10 @@ final class PlayerController: ObservableObject {
     private var playbackPreparationTask: Task<Void, Never>?
     private var scopePlaybackResumeTask: Task<Void, Never>?
     private var surfaceReloadResumeTask: Task<Void, Never>?
+    /// True from a playing reload until playback is confirmed again, so a
+    /// second reload in that window (fullscreen entry reloads twice) still
+    /// resumes. Cleared by `pause()`.
+    private var resumeAfterReload = false
     private let proResRAWDetector: ProResRAWDetector
 
     /// Monotonically increasing counter invalidating stale async work from
@@ -252,7 +248,10 @@ final class PlayerController: ObservableObject {
     /// frame 1. openFile awaits SwiftMediaMetadata results before calling this so
     /// the metadata path is the normal case; on the 500 ms timeout fallback
     /// the values land later via updateMetadata.
-    func loadMedia(_ item: MediaItem, startTime: TimeInterval = 0) {
+    /// Set by `loadMedia(_:autoplay:)`; consumed when the new file becomes ready.
+    private var playWhenReady = false
+
+    func loadMedia(_ item: MediaItem, startTime: TimeInterval = 0, autoplay: Bool = false) {
         let previousURL = mediaItem?.url
         mediaItem = item
 
@@ -283,142 +282,11 @@ final class PlayerController: ObservableObject {
                 videoSourceSize = nil
             }
 
+            playWhenReady = autoplay
             preparePlayback(startTime: max(0, startTime))
         }
     }
     
-    /// Loads a video with progressive enhancement support.
-    /// Checks cache for enhanced version, loads it if available, otherwise loads original
-    /// and starts background enhancement if appropriate.
-    func loadVideo(_ url: URL) async {
-        currentVideoURL = url
-        
-        // Initialize cache if needed
-        if enhancementCache == nil {
-            enhancementCache = EnhancementCache()
-        }
-        
-        // Check for cached enhanced version
-        if let enhancedURL = await enhancementCache?.getEnhancedURL(for: url) {
-            logger.info("Found cached enhanced version: \(enhancedURL.path)")
-            currentVideoURL = enhancedURL
-            
-            // Load the enhanced version through existing media loading path
-            let name = enhancedURL.deletingPathExtension().lastPathComponent
-            let size = (try? FileManager.default.attributesOfItem(atPath: enhancedURL.path)[.size] as? Int64) ?? 0
-            let item = MediaItem(url: enhancedURL, name: name, size: size)
-            await MainActor.run {
-                self.loadMedia(item)
-            }
-        } else {
-            // Load original video
-            let name = url.deletingPathExtension().lastPathComponent
-            let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int64) ?? 0
-            let item = MediaItem(url: url, name: name, size: size)
-            await MainActor.run {
-                self.loadMedia(item)
-            }
-            
-            // Check if enhancement is recommended
-            if let mpvPlayer = mpvPlayer {
-                let suggestion = EnhancementSuggestion.suggest(
-                    bitrate: mpvPlayer.videoBitrate,
-                    sourceSize: mpvPlayer.videoSourceSize,
-                    pixelFormat: mpvPlayer.pixelFormat
-                )
-                
-                if suggestion.shouldEnhance {
-                    // Start background enhancement
-                    startBackgroundEnhancement(for: url, suggestion: suggestion)
-                }
-            }
-        }
-    }
-    
-    /// Starts background enhancement for a video.
-    private func startBackgroundEnhancement(for url: URL, suggestion: EnhancementSuggestion.Suggestion) {
-        isEnhancementInProgress = true
-        
-        enhancementTask = Task {
-            if diffusionEnhancer == nil {
-                diffusionEnhancer = DiffusionEnhancer()
-            }
-            
-            guard let enhancer = diffusionEnhancer else {
-                logger.error("Failed to initialize diffusion enhancer")
-                await MainActor.run {
-                    self.isEnhancementInProgress = false
-                }
-                return
-            }
-            
-            // Check if Stream-DiffVSR is set up
-            let isSetup = await enhancer.isSetup()
-            if !isSetup {
-                logger.info("Stream-DiffVSR not set up, skipping background enhancement")
-                await MainActor.run {
-                    self.isEnhancementInProgress = false
-                }
-                return
-            }
-            
-            let progress = await enhancer.enhance(
-                videoURL: url,
-                outputURL: nil,
-                progressHandler: { [weak self] progress in
-                    Task { @MainActor in
-                        self?.enhancementProgress = progress.fractionCompleted
-                    }
-                }
-            )
-            
-            await MainActor.run {
-                self.isEnhancementInProgress = false
-                self.enhancementProgress = 0.0
-            }
-            
-            if case .completed = progress.status, let enhancedURL = progress.outputURL {
-                // Store in cache
-                do {
-                    try await enhancementCache?.store(
-                        originalURL: url,
-                        enhancedURL: enhancedURL,
-                        parameters: EnhancementParameters(
-                            profile: suggestion.recommendedProfile,
-                            bitrate: mpvPlayer?.videoBitrate ?? 0,
-                            sourceSize: mpvPlayer?.videoSourceSize,
-                            pixelFormat: mpvPlayer?.pixelFormat
-                        )
-                    )
-                    
-                    logger.info("Background enhancement completed: \(enhancedURL.path)")
-                    
-                    // Notify user that enhanced version is available
-                    await MainActor.run {
-                        NotificationCenter.default.post(
-                            name: .enhancementCompleted,
-                            object: nil,
-                            userInfo: ["enhancedURL": enhancedURL, "originalURL": url]
-                        )
-                    }
-                } catch {
-                    logger.error("Failed to store enhanced video in cache: \(error)")
-                }
-            }
-        }
-    }
-    
-    /// Cancels the current enhancement process.
-    func cancelEnhancement() async {
-        enhancementTask?.cancel()
-        if let enhancer = diffusionEnhancer {
-            await enhancer.cancel()
-        }
-        enhancementTask = nil
-        isEnhancementInProgress = false
-        enhancementProgress = 0.0
-    }
-
     func updateMetadata(_ item: MediaItem) {
         guard mediaItem?.url == item.url else { return }
         mediaItem?.metadata = item.metadata
@@ -557,10 +425,11 @@ final class PlayerController: ObservableObject {
     /// reload triggered by the app itself — a surface change, Force Reload —
     /// would otherwise stop playback the user never asked to stop.
     func reloadPreservingPlaybackState() {
-        let wasPlaying = isPlaying
+        let wasPlaying = isPlaying || resumeAfterReload
         let resumeTime = playbackTimeSnapshot()
         preparePlayback(startTime: resumeTime, resetAudioSelection: false)
         guard wasPlaying else { return }
+        resumeAfterReload = true
         // teardown() inside preparePlayback has already advanced the ID, so
         // this is the generation the resume belongs to.
         let prepID = preparationID
@@ -568,11 +437,20 @@ final class PlayerController: ObservableObject {
             guard let self else { return }
             for await phase in self.$playbackPhase.values {
                 guard !Task.isCancelled, self.preparationID == prepID else { return }
-                if case .failed = phase { break }
+                if case .failed = phase {
+                    self.resumeAfterReload = false
+                    break
+                }
                 if phase.permitsPlaybackControls {
                     self.play()
                     break
                 }
+            }
+            // isPlaying follows mpv's pause property, which arrives after play().
+            for await playing in self.$isPlaying.values where playing {
+                guard !Task.isCancelled, self.preparationID == prepID else { return }
+                self.resumeAfterReload = false
+                break
             }
             guard self.preparationID == prepID else { return }
             self.surfaceReloadResumeTask = nil
@@ -898,6 +776,10 @@ final class PlayerController: ObservableObject {
     func markPlaybackReady(isBuffering: Bool) {
         guard playbackFailure == nil else { return }
         playbackPhase = isBuffering ? .buffering : .ready
+        if playWhenReady {
+            playWhenReady = false
+            play()
+        }
     }
 
     func updateBufferingState(_ isBuffering: Bool) {
@@ -990,6 +872,7 @@ final class PlayerController: ObservableObject {
     }
 
     func pause() {
+        resumeAfterReload = false
         logPlaybackTransition("pause")
         stopReverse()
 

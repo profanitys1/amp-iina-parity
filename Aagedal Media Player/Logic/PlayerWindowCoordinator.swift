@@ -192,7 +192,7 @@ final class PlayerWindowCoordinator: ObservableObject {
                 onTimecodeModeChange(metadata.timecode != nil ? .source : .relative)
             }
 
-            controller.loadMedia(item)
+            controller.loadMedia(item, autoplay: UserDefaults.standard.value(for: AppSettings.autoPlayOnOpen))
 
             if preloadedMetadata != nil {
                 // updateMetadata runs the HDR transfer-function pass and

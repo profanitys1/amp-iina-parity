@@ -186,16 +186,11 @@ For older reviews with rounded broadcast rates, use **Notes → Migrate Rounded
 Timebases…** to preview and save a corrected copy while keeping recorded frame
 numbers. Use **Open Notes Copy…** to reopen it in a later session.
 
-### AI Video Enhancement
+### Enhancement suggestion
 
-amp includes AI-powered video enhancement for low-bitrate videos:
-
-- **Real-time shaders**: FSRCNNX, SSimSuperRes, RAVU for immediate quality improvement
-- **Offline diffusion**: Stream-DiffVSR for maximum quality on severely compressed videos
-- **Smart caching**: Enhanced versions stored for future playback
-- **Progressive enhancement**: Start playback immediately, enhance in background
-
-See [Enhancement Feature Documentation](docs/enhancement-feature.md) for details.
+Low-bitrate (<10 Mbit/s) or low-resolution videos show a banner. **Enhance Now**
+applies a real-time shader profile from your mpv shader folder; change it any
+time in Settings → Rendering → Profile.
 
 ### Playlist and metadata panel
 ⌘I (or the Playlist button) floats a see-through Liquid Glass panel over the

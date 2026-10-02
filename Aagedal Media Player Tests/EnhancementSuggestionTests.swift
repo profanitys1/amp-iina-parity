@@ -15,7 +15,7 @@ struct EnhancementSuggestionTests {
         )
         
         #expect(suggestion.shouldEnhance == true)
-        #expect(suggestion.recommendedProfile == .upscaleLight)
+        #expect(suggestion.recommendedProfile == .compressed)
         #expect(suggestion.reason.contains("Low bitrate"))
     }
     

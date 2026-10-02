@@ -13,8 +13,12 @@ import Foundation
 nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable, Codable {
     case off
     case chroma
+    case efficient
     case sharpen
     case upscaleLight
+    case compressed
+    case compressedGrain
+    case crisp
     case upscaleStrong
     case restore
 
@@ -24,9 +28,13 @@ nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable, Co
         switch self {
         case .off: "Faithful"
         case .chroma: "Chroma reconstruction"
+        case .efficient: "Efficient upscale"
         case .sharpen: "Sharpened upscale"
         case .upscaleLight: "Neural upscale — light"
+        case .compressed: "Compressed movie"
+        case .crisp: "Crisp"
         case .upscaleStrong: "Neural upscale — strong"
+        case .compressedGrain: "Compressed movie + grain"
         case .restore: "Restoration"
         }
     }
@@ -35,9 +43,13 @@ nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable, Co
         switch self {
         case .off: "No shaders. Plain resampling that stays true to the source — use this for inspection."
         case .chroma: "Infers 4:2:0 chroma edges from luma. Alters colour detail; cheap at any resolution."
+        case .efficient: "Small FSRCNNX doubler with KrigBilateral chroma. Light enough for battery."
         case .sharpen: "Sharper scaler plus SSimSuperRes. Alters the image; adds ringing-free edge contrast."
         case .upscaleLight: "Neural luma upscaling for sub-4K sources, plus chroma reconstruction."
+        case .compressed: "Debands, then upscales with ArtCNN's denoise-and-sharpen model. Scored best on compressed video. For streaming and messaging-app clips."
+        case .crisp: "ArtCNN's denoise-and-sharpen model plus adaptive sharpening. For soft but clean-ish sources."
         case .upscaleStrong: "Larger upscaling network. Best for sub-1080p sources, on AC power."
+        case .compressedGrain: "Compressed movie plus fine luma grain, which hides leftover blocking and the smooth \"plastic\" look."
         case .restore: "Denoise, upscale and regrain rough standard-definition sources."
         }
     }
@@ -49,12 +61,22 @@ nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable, Co
             []
         case .chroma:
             ["CfL_Prediction.glsl"]
+        case .efficient:
+            ["FSRCNNX_x2_8-0-4-1.glsl", "KrigBilateral.glsl"]
         case .sharpen:
             ["SSimSuperRes.glsl"]
         case .upscaleLight:
             ["ArtCNN_C4F16.glsl", "CfL_Prediction.glsl"]
+        // hdeband runs first and replaces mpv's own deband (its author's
+        // instruction), so these profiles keep `enablesDeband` false.
+        case .compressed:
+            ["hdeband.glsl", "ArtCNN_C4F16_DS.glsl", "CfL_Prediction.glsl"]
+        case .crisp:
+            ["ArtCNN_C4F16_DS.glsl", "CfL_Prediction.glsl", "adaptive-sharpen.glsl"]
         case .upscaleStrong:
             ["ArtCNN_C4F32.glsl", "CfL_Prediction.glsl"]
+        case .compressedGrain:
+            ["hdeband.glsl", "ArtCNN_C4F16_DS.glsl", "CfL_Prediction.glsl", "noise_static_luma.hook"]
         case .restore:
             ["nlmeans.glsl", "ravu-zoom-ar-r3.hook", "CfL_Prediction.glsl", "noise_static_luma.hook"]
         }
