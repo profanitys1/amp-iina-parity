@@ -104,6 +104,20 @@ nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable, Co
             ? ["scale": "ewa_lanczossharp", "scaler-resizes-only": "no"]
             : ["scale": "lanczos", "scaler-resizes-only": "yes"]
     }
+
+    /// Presentation timing that differs per profile. Every profile sets both keys.
+    ///
+    /// Faithful stays on mpv's default `audio` sync with no interpolation, so
+    /// inspection sees each decoded frame exactly once. Every other profile,
+    /// Automatic included, resamples audio to lock video to the display and
+    /// blends at frame boundaries (`tscale=oversample`, set at init), which
+    /// removes 25 fps judder on a 120 Hz panel. This relies on the MPVKit
+    /// fork's moltenvk vsync feedback (CLAUDE.md, MPVKit-GPL).
+    var playbackSyncOptions: [String: String] {
+        self == .off
+            ? ["video-sync": "audio", "interpolation": "no"]
+            : ["video-sync": "display-resample", "interpolation": "yes"]
+    }
 }
 
 /// Resolves shader file names to on-disk paths mpv can load.

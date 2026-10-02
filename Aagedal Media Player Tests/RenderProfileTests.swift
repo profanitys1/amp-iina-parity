@@ -109,4 +109,15 @@ final class RenderProfileTests: XCTestCase {
             XCTAssertFalse(profile.enablesDeband, "\(profile.rawValue)")
         }
     }
+
+    func testFaithfulKeepsAudioSyncAndEveryOtherProfileSyncsToTheDisplay() {
+        XCTAssertEqual(RenderProfile.off.playbackSyncOptions,
+                       ["video-sync": "audio", "interpolation": "no"],
+                       "inspection must see each decoded frame once, unblended")
+        for profile in RenderProfile.allCases where profile != .off {
+            XCTAssertEqual(profile.playbackSyncOptions,
+                           ["video-sync": "display-resample", "interpolation": "yes"],
+                           profile.rawValue)
+        }
+    }
 }

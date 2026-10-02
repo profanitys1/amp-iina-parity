@@ -360,7 +360,8 @@ final class MPVViewController: NSViewController {
     /// mistimes frames on a 120 Hz panel or a 50 Hz external monitor.
     private func applyDisplayRefreshRate() {
         guard let screen = view.window?.screen else { return }
-        player.applyDisplayRefreshRate(Double(screen.maximumFramesPerSecond))
+        let displayID = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? 0
+        player.applyDisplay(refreshRate: Double(screen.maximumFramesPerSecond), displayID: displayID)
         colorController?.refresh(screen: screen)
     }
 

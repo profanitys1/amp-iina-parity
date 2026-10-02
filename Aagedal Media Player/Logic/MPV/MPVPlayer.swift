@@ -343,6 +343,19 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         // filtered, only the presentation of an already-late frame is skipped.
         checkError(mpv_set_option_string(mpv, "framedrop", "vo"), context: "framedrop")
 
+        // The hwdec surface pool is sized when the decoder opens, and mpv's manual
+        // says interpolation "may require" extra frames. Set it before init so a
+        // profile switch to interpolation never starves the pool. `oversample` is
+        // mpv's default tscale, pinned so a future default change cannot blur.
+        checkError(mpv_set_option_string(mpv, "hwdec-extra-frames", "4"), context: "hwdec-extra-frames")
+        checkError(mpv_set_option_string(mpv, "tscale", "oversample"), context: "tscale")
+        if displayRefreshRate > 0 {
+            checkError(mpv_set_option_string(mpv, "display-fps-override", String(format: "%.3f", displayRefreshRate)), context: "display-fps-override")
+        }
+        if displayID != 0 {
+            checkError(mpv_set_option_string(mpv, "screen-name", String(displayID)), context: "screen-name")
+        }
+
         applyScalerOptions()
         applyRenderProfileOption()
 
@@ -1232,6 +1245,8 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     private var automaticAnalysis: Task<Void, Never>?
     private var drawableSize: CGSize = .zero
     private var displayRefreshRate: Double = 0
+    /// CGDirectDisplayID of the screen showing the video; 0 until the view reports one.
+    private var displayID: UInt32 = 0
     private var budgetMonitor = GPUBudgetMonitor(sourceFPS: 0, displayFPS: 0)
     private var automaticReselection: Task<Void, Never>?
     private var budgetSampling: Task<Void, Never>?
@@ -1309,6 +1324,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         for (name, value) in profile.scaleOptions {
             checkError(mpv_set_option_string(mpv, name, value), context: name)
         }
+        for (name, value) in profile.playbackSyncOptions {
+            checkError(mpv_set_option_string(mpv, name, value), context: name)
+        }
     }
 
     /// Switches the shader stack on a running player.
@@ -1317,6 +1335,12 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         UserDefaults.standard.set(profile.rawValue, for: AppSettings.renderProfile)
 
         guard mpv != nil else { return }
+
+        // Keyed to the selected profile, not the applied one: Automatic may apply
+        // Faithful's shader stack (HDR), but only an explicit Faithful choice means inspection.
+        for (name, value) in profile.playbackSyncOptions {
+            setString(name, value)
+        }
 
         automaticAnalysis?.cancel()
         automaticAnalysis = nil
@@ -1600,13 +1624,21 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
-    /// mpv cannot query display refresh on macOS, so the app has to tell it.
-    /// Without this mpv assumes 60 Hz and mistimes frames on a 120 Hz panel or
-    /// an external monitor running at 50.
-    func applyDisplayRefreshRate(_ fps: Double) {
-        guard fps > 0 else { return }
-        displayRefreshRate = fps
-        setString("display-fps-override", String(format: "%.3f", fps))
+    /// mpv cannot query the display on macOS, so the app has to tell it.
+    /// Without a refresh rate mpv assumes 60 Hz and mistimes frames on a 120 Hz
+    /// panel or an external monitor running at 50. The display ID goes to the
+    /// MPVKit fork's moltenvk context through `screen-name`, which binds its
+    /// vsync display link to that screen. Values set before the context exists
+    /// are applied by `setupMPV`.
+    func applyDisplay(refreshRate fps: Double, displayID id: UInt32) {
+        if fps > 0 {
+            displayRefreshRate = fps
+            setString("display-fps-override", String(format: "%.3f", fps))
+        }
+        if id != 0, id != displayID {
+            displayID = id
+            setString("screen-name", String(id))
+        }
     }
 
     private func setFlag(_ name: String, _ flag: Bool) {
