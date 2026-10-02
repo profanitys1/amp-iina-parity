@@ -81,8 +81,10 @@ nonisolated enum SourceClassifier {
         /// Below this detail ratio a source counts as soft.
         var softDetailRatio: Double
 
-        /// Starting values. Task 7 replaces them with the approved calibration.
-        static let calibrated = Thresholds(lowBitsPerPixel: 0.05, blockiness: 1.6, softDetailRatio: 0.54)
+        /// Approved 2026-10-02 from scripts/calibrate-profile-picker.sh over 79 local files:
+        /// 0.07 moves 1-4 Mbit web encodes (0.053-0.064 bpp) to compressed; clean files
+        /// peaked at blockiness 1.54; soft files sat at detail 0.517-0.537, clean from 0.548.
+        static let calibrated = Thresholds(lowBitsPerPixel: 0.07, blockiness: 1.6, softDetailRatio: 0.54)
     }
 
     /// Precedence: hdr, then topaz, then compressed, soft, clean. Without `stats` only
@@ -97,6 +99,12 @@ nonisolated enum SourceClassifier {
         }
         if facts.topazTag != nil {
             return SourceClassification(sourceClass: .topaz, reason: "Topaz tag")
+        }
+        // Below 720p, bits per pixel overstates quality (640x352 at 1.5 Mbit/s is 0.22),
+        // and the 2026-10-02 benchmark scored the Compressed movie stack best on exactly
+        // such 360p phone-grade encodes. The short side handles portrait video.
+        if facts.width > 0, facts.height > 0, min(facts.width, facts.height) < 720 {
+            return SourceClassification(sourceClass: .compressed, reason: "low-res \(facts.width)x\(facts.height)")
         }
         if let bitsPerPixel = facts.bitsPerPixel, bitsPerPixel < thresholds.lowBitsPerPixel {
             let megabits = Double(facts.videoBitrate) / 1_000_000

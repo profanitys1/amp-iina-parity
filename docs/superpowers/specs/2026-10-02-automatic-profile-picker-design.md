@@ -19,7 +19,7 @@ When a file opens, amp chooses a shader profile that fits the file's actual qual
 |---|---|---|---|
 | hdr | PQ/HLG transfer (existing gate) | Faithful | Faithful |
 | topaz | container or stream tag `videoai` or `videoai_provider` | Neural upscale — light | Sharpened upscale |
-| compressed | low bits per pixel, or high blockiness | Compressed movie | Efficient upscale |
+| compressed | short side under 720 px, low bits per pixel (< 0.07), or high blockiness (≥ 1.6) | Compressed movie | Efficient upscale |
 | soft | low detail ratio (an upscale of a lower-resolution source) | Crisp | Sharpened upscale |
 | clean | everything else | Neural upscale — light | Sharpened upscale |
 

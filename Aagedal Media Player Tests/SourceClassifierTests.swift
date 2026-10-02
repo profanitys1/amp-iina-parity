@@ -92,4 +92,15 @@ struct SourceClassifierTests {
         #expect(SourceFacts.topazTag(inFFmpegOutput: "    Metadata:\n      VIDEOAI_PROVIDER: Topaz\n") == "Topaz")
         #expect(SourceFacts.topazTag(inFFmpegOutput: "    encoder         : Lavf\n") == nil)
     }
+
+    @Test func belowSevenTwentyIsCompressedWhateverTheBitsPerPixel() {
+        // 640x352 at 1.5 Mbit/s is 0.22 bits per pixel: generous per pixel, still a phone-grade encode.
+        let small = facts(width: 640, height: 352, fps: 30, bitrate: 1_500_000)
+        #expect(SourceClassifier.classify(small, healthy, thresholds: thresholds)
+            == SourceClassification(sourceClass: .compressed, reason: "low-res 640x352"))
+        // Portrait 720p is not low-res.
+        #expect(SourceClassifier.classify(facts(width: 720, height: 1280, fps: 30, bitrate: 8_000_000), healthy, thresholds: thresholds).sourceClass == .clean)
+        // Topaz output stays Topaz even when small.
+        #expect(SourceClassifier.classify(facts(width: 640, height: 352, topazTag: "x"), healthy, thresholds: thresholds).sourceClass == .topaz)
+    }
 }
