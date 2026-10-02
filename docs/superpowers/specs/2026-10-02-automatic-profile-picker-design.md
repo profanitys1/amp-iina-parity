@@ -1,6 +1,6 @@
 # Automatic render-profile picker — design
 
-Date: 2026-10-02. Status: approved in brainstorming, awaiting spec review.
+Date: 2026-10-02. Status: approved by the user 2026-10-02.
 Supersedes the ratio-only Enhance tier ladder (`docs/superpowers/specs/2026-09-30-auto-enhance-tier-design.md`).
 
 ## Goal
@@ -11,7 +11,7 @@ When a file opens, amp chooses a shader profile that fits the file's actual qual
 
 - A new `RenderProfile.automatic` ("Automatic") appears in Settings → Rendering → Profile. Picking any concrete profile there overrides it.
 - Automatic applies its choice without asking. The existing badge (`RenderTierBadge`) shows `Auto · <profile> · <reason>`, e.g. `Auto · Compressed movie · 2.1 Mbit/s`.
-- The Enhance toggle and its ratio-based tier ladder are removed, because Automatic replaces them. `RenderTier`, `TierSelector` and `RenderTierTests` are deleted. `GPUBudgetMonitor` is kept. Settings migration: a stored `enhance = true` with profile Faithful becomes profile Automatic, and the `enhance` key is then removed. The default profile stays Faithful, so amp still opens files faithfully unless the user picks Automatic.
+- The Enhance toggle and its ratio-based tier ladder are removed, because Automatic replaces them. `RenderTier`, `TierSelector` and `RenderTierTests` are deleted. `GPUBudgetMonitor` is kept. Settings migration: a stored `enhance = true` with profile Faithful becomes profile Automatic, and the `enhance` key is then removed. Automatic is the new app-wide default (`AppSettings.renderProfile` default becomes `automatic`), replacing the earlier faithful-by-default decision at the user's request; Faithful stays one click away in the Profile list.
 
 ## Source classes and mapping
 
