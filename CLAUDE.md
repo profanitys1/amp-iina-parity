@@ -35,7 +35,7 @@ The shared scheme includes the `Aagedal Media Player Tests` XCTest target. No Gi
 
 Swift Package dependencies (all remote, resolved via SPM):
 
-- **MPVKit-GPL** — `https://github.com/aagedal/MPVKit`, pinned to revision `230c317` (not `branch: main`). Truls's fork of MPVKit. Bundles mpv 0.41.0, FFmpeg n8.1.2, MoltenVK 1.4.2, Libplacebo 7.360.1. Those two are floors: libplacebo 7.360.0 lacks the MoltenVK timeline-semaphore workaround (mpv#17258) and MoltenVK 1.4.0/1.4.1 lose the device on imported `MTLTexture`s, which zero-copy `hwdec=videotoolbox` uses. Bump the pin deliberately, never by a routine re-resolve.
+- **MPVKit-GPL** — `https://github.com/profanitys1/MPVKit`, branch `amp-master-vsync`, pinned to a revision (not `branch:`). Fork of Truls's `aagedal/MPVKit`. Bundles mpv master `3186d369f9` (patches `0001`-`0004` in `Sources/BuildScripts/patch/libmpv`; `0004` gives the `moltenvk` context CVDisplayLink vsync feedback, display chosen through `screen-name` = `CGDirectDisplayID`), libplacebo master `92b5ac6` (API 7.374), FFmpeg n8.1.2 rebuilt against it, MoltenVK 1.4.2. Floors: libplacebo ≥ 7.360.1 (MoltenVK timeline-semaphore workaround, mpv#17258) and MoltenVK ≥ 1.4.2 (1.4.0/1.4.1 lose the device on imported `MTLTexture`s used by zero-copy `hwdec=videotoolbox`). Rebuilding libplacebo forces an FFmpeg rebuild, because `vf_libplacebo` links the API-versioned `pl_log_create_<API>`. Bump the pin deliberately, never by a routine re-resolve.
 - **SwiftMediaMetadata** — `https://github.com/aagedal/SwiftMediaMetadata`, semver `>= 3.0.0`. Pure-Swift metadata library, replaces the earlier ffprobe shell-out for stream metadata.
 - **Sparkle** — `https://github.com/sparkle-project/Sparkle`, semver `>= 2.9.1`. Auto-update infrastructure.
 
