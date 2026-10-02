@@ -6,11 +6,13 @@ import Foundation
 
 /// A named GLSL shader stack applied to the gpu-next render path.
 ///
-/// The cases are ordered coolest to warmest: each step adds GPU work, so the
-/// heavier profiles are worth spending only when the source actually needs the
-/// reconstruction. Shader files are not bundled — they are read from a user
+/// `automatic` comes first: it picks one of the others for each file. The rest are
+/// ordered coolest to warmest: each step adds GPU work, so the heavier profiles
+/// are worth spending only when the source actually needs the reconstruction.
+/// Shader files are not bundled — they are read from a user
 /// shader directory so the same library can be shared with a standalone mpv.
 nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable, Codable {
+    case automatic
     case off
     case chroma
     case efficient
@@ -26,6 +28,7 @@ nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable, Co
 
     var displayName: String {
         switch self {
+        case .automatic: "Automatic"
         case .off: "Faithful"
         case .chroma: "Chroma reconstruction"
         case .efficient: "Efficient upscale"
@@ -41,6 +44,7 @@ nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable, Co
 
     var summary: String {
         switch self {
+        case .automatic: "Looks at each file and picks the shader profile that fits its quality and your GPU, then steps down if a frame no longer fits. Choose Faithful for inspection."
         case .off: "No shaders. Plain resampling that stays true to the source — use this for inspection."
         case .chroma: "Infers 4:2:0 chroma edges from luma. Alters colour detail; cheap at any resolution."
         case .efficient: "Small FSRCNNX doubler with KrigBilateral chroma. Light enough for battery."
@@ -57,7 +61,7 @@ nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable, Co
     /// Shader file names in load order, resolved against the shader directory.
     var shaderFileNames: [String] {
         switch self {
-        case .off:
+        case .automatic, .off:
             []
         case .chroma:
             ["CfL_Prediction.glsl"]
@@ -134,8 +138,7 @@ nonisolated struct ShaderLibrary: Sendable {
         missingShaderNames(named: profile.shaderFileNames)
     }
 
-    /// Existing paths for `names`, in the given order. Shared by the manual
-    /// profiles and the automatic tiers.
+    /// Existing paths for `names`, in the given order.
     func shaderPaths(named names: [String]) -> [String] {
         names.compactMap { name in
             let path = directory.appending(path: name).path(percentEncoded: false)

@@ -105,4 +105,12 @@ struct ProfilePickerTests {
         // 1080p, fullscreen, 30 fps: compressed (33 ms) does not fit 26.7 ms.
         #expect(pick(.compressed, fps: 0, source: 0, drawable: 0) == .efficient)
     }
+    @Test func automaticIsNeverCostedOrPicked() {
+        #expect(ProfilePicker.estimatedMilliseconds(profile: .automatic, sourcePixels: Self.p720, drawablePixels: Self.fullscreen) == nil)
+        for sourceClass in SourceClass.allCases {
+            for fps in [24.0, 60.0] {
+                #expect(!ProfilePicker.chain(for: sourceClass, fps: fps).contains(.automatic))
+            }
+        }
+    }
 }

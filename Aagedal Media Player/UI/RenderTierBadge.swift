@@ -5,7 +5,7 @@
 import SwiftUI
 
 /// Names the shaders changing the picture: a manual profile, or the
-/// automatic tier Enhance picked.
+/// profile Automatic picked with the reason, for example `Auto · Compressed movie · 2.1 Mbit/s`.
 struct RenderTierBadge: View {
     @ObservedObject var player: MPVPlayer
     @AppStorage(AppSettings.shaderDirectory.key)
@@ -13,7 +13,7 @@ struct RenderTierBadge: View {
 
     private var missingShaderNames: [String] {
         ShaderLibrary(directoryPath: shaderDirectory)
-            .missingShaderNames(named: RenderTier.allCases.flatMap(\.shaderFileNames))
+            .missingShaderNames(for: player.activeProfile)
     }
 
     @Environment(\.accessibilityReduceMotion)
@@ -21,11 +21,11 @@ struct RenderTierBadge: View {
     @Environment(\.accessibilityReduceTransparency)
     private var reduceTransparency
 
-    /// Nil when nothing alters the picture.
+    /// Nil when nothing alters the picture. Under Automatic the badge stays up even on
+    /// Faithful, so the reason (for example HDR) is visible.
     private var label: String? {
-        if player.renderProfile != .off { return player.renderProfile.displayName }
-        if player.isTierSteppedDown { return "\(player.activeTier.displayName) · stepped down" }
-        return player.activeTier != .faithful ? player.activeTier.displayName : nil
+        if player.renderProfile == .automatic { return player.automaticChoice?.badgeText }
+        return player.renderProfile == .off ? nil : player.renderProfile.displayName
     }
 
     var body: some View {

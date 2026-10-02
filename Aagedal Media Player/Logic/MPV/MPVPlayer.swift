@@ -171,7 +171,8 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     /// this object can be deallocated.  Must be called before dropping the
     /// last external strong reference.
     func destroy() {
-        tierReselection?.cancel()
+        automaticReselection?.cancel()
+        automaticAnalysis?.cancel()
         budgetSampling?.cancel()
         guard mpv != nil else { return }
 
@@ -439,6 +440,8 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
             error = RIFXAudioDecoding.playbackUnavailable
             return
         }
+        automaticAnalysis?.cancel()
+        automaticAnalysis = nil
         guard mpv != nil else {
             logger.info("MPV not initialized yet, storing pending load for: \(url.lastPathComponent)")
             pendingURL = url
@@ -499,6 +502,8 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
 
     func stop() {
         command("stop")
+        automaticAnalysis?.cancel()
+        automaticAnalysis = nil
         resetTimePosCoalescing()
         isPlaying = false
         timePos = 0
@@ -945,7 +950,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                                 DispatchQueue.main.async {
                                     self.videoSourceSize = NSSize(width: dispW, height: dispH)
                                     self.videoAspectRatio = CGFloat(dispW) / CGFloat(dispH)
-                                    self.scheduleTierReselection()
+                                    self.scheduleAutomaticReselection()
                                     scalingLogger.info("mpv emitted videoSourceSize=\(dispW)x\(dispH) (ratio=\(Double(dispW) / Double(dispH)))")
                                 }
                             }
@@ -1035,9 +1040,7 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                         self.reversalBufferStep = -1
                         self.lastReversalBufferRaise = nil
                         self.isFileLoaded = true
-                        // A new file gets the whole ladder back. Broken tiers stay excluded.
-                        self.tierFloor = .fsrcnnx
-                        self.reselectTier()
+                        self.beginAutomaticSelection()
                         self.refreshBudgetMonitor()
                         self.updateBudgetSampling()
                         if self.pendingSeekAfterLoad > 0 {
@@ -1215,24 +1218,22 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
 
     // MARK: - Render Profile
 
-    /// The shader stack currently applied to the render path.
-    @Published private(set) var renderProfile: RenderProfile = .off
+    /// The profile chosen in Settings. `.automatic` means one is picked for each file.
+    @Published private(set) var renderProfile: RenderProfile = .automatic
 
-    /// The automatic tier in effect. `.faithful` whenever Enhance is off or a
-    /// manual profile other than Faithful is chosen.
-    @Published private(set) var activeTier: RenderTier = .faithful
+    /// The profile whose shaders are applied now: `renderProfile` when it is concrete, the
+    /// Automatic pick otherwise, and `.off` until a file has loaded.
+    @Published private(set) var activeProfile: RenderProfile = .off
 
-    /// True when the GPU monitor forced a lighter tier than the ratio allows.
-    @Published private(set) var isTierSteppedDown = false
+    /// The Automatic pick with its class and reason, for the badge. Nil unless Automatic is selected.
+    @Published private(set) var automaticChoice: AutomaticSelection.Choice?
 
-    /// The heaviest tier allowed after GPU step-downs. Reset for each file.
-    private var tierFloor: RenderTier = .fsrcnnx
-    /// Tiers whose shaders libplacebo rejected. Kept for this player's lifetime.
-    private var brokenTiers: Set<RenderTier> = []
+    private var automaticSelection = AutomaticSelection()
+    private var automaticAnalysis: Task<Void, Never>?
     private var drawableSize: CGSize = .zero
     private var displayRefreshRate: Double = 0
     private var budgetMonitor = GPUBudgetMonitor(sourceFPS: 0, displayFPS: 0)
-    private var tierReselection: Task<Void, Never>?
+    private var automaticReselection: Task<Void, Never>?
     private var budgetSampling: Task<Void, Never>?
 
     private var shaderLibrary: ShaderLibrary {
@@ -1290,8 +1291,9 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     /// before `mpv_initialize` — use `setRenderProfile` afterwards.
     private func applyRenderProfileOption() {
         let stored = UserDefaults.standard.value(for: AppSettings.renderProfile)
-        let profile = RenderProfile(rawValue: stored) ?? .off
+        let profile = RenderProfile(rawValue: stored) ?? .automatic
         renderProfile = profile
+        activeProfile = profile == .automatic ? .off : profile
 
         let library = shaderLibrary
         let missing = library.missingShaderNames(for: profile)
@@ -1316,15 +1318,31 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
 
         guard mpv != nil else { return }
 
+        automaticAnalysis?.cancel()
+        automaticAnalysis = nil
+        guard profile == .automatic else {
+            automaticChoice = nil
+            apply(profile: profile)
+            return
+        }
+        // Switching to Automatic mid-file: pick from what is known, then look inside the file.
+        if isFileLoaded {
+            beginAutomaticSelection()
+        } else {
+            apply(profile: .off)
+        }
+    }
+
+    /// Applies a concrete profile's shaders and scaler options to the running player.
+    private func apply(profile: RenderProfile) {
+        activeProfile = profile
         applyShaderStack(
             paths: shaderLibrary.shaderPaths(for: profile),
             scaleOptions: profile.scaleOptions,
             deband: profile.enablesDeband
         )
-        activeTier = .faithful
-        isTierSteppedDown = false
+        refreshBudgetMonitor()
         updateBudgetSampling()
-        reselectTier()
     }
 
     /// Replaces the shader list one path at a time, so a directory containing
@@ -1340,71 +1358,96 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
-    // MARK: - Automatic Enhancement
+    // MARK: - Automatic Profile
 
-    func setEnhanceEnabled(_ enabled: Bool) {
-        UserDefaults.standard.set(enabled, for: AppSettings.enhance)
-        reselectTier()
+    /// A new file under Automatic: pick from metadata now, then look inside the file.
+    private func beginAutomaticSelection() {
+        guard mpv != nil, renderProfile == .automatic else { return }
+        automaticAnalysis?.cancel()
+        // The drawable size is known before the first file; the selection has not seen it yet.
+        _ = automaticSelection.setDrawable(pixels: drawableSize.width * drawableSize.height)
+        applyAutomatic(automaticSelection.beginFile(facts: currentSourceFacts(topazTag: nil)))
+        startAnalysis()
+    }
+
+    /// What mpv knows about the loaded file. `topazTag` is the tag already found, if any.
+    private func currentSourceFacts(topazTag: String?) -> SourceFacts {
+        let duration = getDouble(MPVProperty.duration)
+        var bitrate = Int64(getInt(MPVProperty.videoBitrate))
+        if bitrate <= 0, duration > 0 {
+            // `video-bitrate` fills in per keyframe and can still be empty at load. The file size
+            // over the duration includes audio, which errs towards "not compressed".
+            let bytes = getInt("file-size")
+            if bytes > 0 { bitrate = Int64(Double(bytes) * 8 / duration) }
+        }
+        let width = videoSourceSize.map { Int($0.width) } ?? getInt(MPVProperty.videoParamsDw)
+        let height = videoSourceSize.map { Int($0.height) } ?? getInt(MPVProperty.videoParamsDh)
+        let pixelFormat = getString(MPVProperty.videoParamsHWPixelFormat) ?? getString(MPVProperty.videoParamsPixelFormat)
+        return SourceFacts(
+            codec: getString("current-tracks/video/codec"),
+            width: width,
+            height: height,
+            fps: getDouble(MPVProperty.containerFPS),
+            videoBitrate: bitrate,
+            bitDepth: SourceFacts.bitDepth(pixelFormat: pixelFormat),
+            isHDR: HDRTransferResolver.resolve(colorTransfer: getString(MPVProperty.videoParamsGamma) ?? videoGamma) != .sdr,
+            topazTag: topazTag ?? getString("metadata/by-key/videoai") ?? getString("metadata/by-key/videoai_provider")
+        )
+    }
+
+    /// Reads a few frames off the main actor, then re-picks with the statistics. A result for a
+    /// file that has since been replaced is dropped: loading cancels this task.
+    private func startAnalysis() {
+        guard let path = getString("path"), FileManager.default.fileExists(atPath: path) else { return }
+        let url = URL(fileURLWithPath: path)
+        let duration = getDouble(MPVProperty.duration)
+        automaticAnalysis = Task { [weak self] in
+            let analysis = await FrameAnalyzer.shared.analyze(url: url, duration: duration)
+            guard !Task.isCancelled, let self, self.renderProfile == .automatic else { return }
+            self.finishAnalysis(analysis)
+        }
+    }
+
+    private func finishAnalysis(_ analysis: SourceAnalysis) {
+        let facts = currentSourceFacts(topazTag: analysis.topazTag ?? automaticSelection.facts.topazTag)
+        if let stats = analysis.stats {
+            logger.info("Frame stats: detail=\(stats.detailRatio, format: .fixed(precision: 3), privacy: .public) blockiness=\(stats.blockiness, format: .fixed(precision: 3), privacy: .public) noise=\(stats.noise, format: .fixed(precision: 4), privacy: .public)")
+        } else {
+            logger.info("No frame stats, keeping the metadata pick")
+        }
+        applyAutomatic(automaticSelection.update(facts: facts, stats: analysis.stats))
+    }
+
+    /// Publishes the choice for the badge and applies its shaders only when the profile changed.
+    private func applyAutomatic(_ choice: AutomaticSelection.Choice) {
+        automaticChoice = choice
+        guard choice.profile != activeProfile else { return }
+        logger.info("Automatic profile: \(choice.profile.displayName, privacy: .public) (\(choice.classification.sourceClass.rawValue, privacy: .public), \(choice.classification.reason, privacy: .public)) drawable=\(Int(self.drawableSize.width))x\(Int(self.drawableSize.height))")
+        apply(profile: choice.profile)
     }
 
     private func drawableSizeDidChange(_ size: CGSize) {
         drawableSize = size
-        scheduleTierReselection()
+        scheduleAutomaticReselection()
     }
 
     /// A live window resize reports many sizes. Swapping shaders on each one
     /// would recompile them repeatedly, so wait for the size to settle.
-    private func scheduleTierReselection() {
-        tierReselection?.cancel()
-        tierReselection = Task { [weak self] in
+    private func scheduleAutomaticReselection() {
+        automaticReselection?.cancel()
+        automaticReselection = Task { [weak self] in
             do { try await Task.sleep(for: .milliseconds(300)) } catch { return }
-            self?.reselectTier()
+            self?.reselectAutomatic()
         }
     }
 
-    private func reselectTier() {
-        guard mpv != nil, renderProfile == .off else { return }
-
-        var target = RenderTier.faithful
-        var steppedDown = false
-        var ratioText = "unknown"
-
-        // HDR content (PQ/HLG) bypasses enhancement tiers. The shaders in the
-        // ladder were designed for SDR luma; how they behave on PQ or HLG luma
-        // has not been measured. Until that measurement exists, stay faithful.
-        let isHDR = HDRTransferResolver.resolve(colorTransfer: videoGamma) != .sdr
-
-        if !isHDR,
-           UserDefaults.standard.value(for: AppSettings.enhance),
-           let source = videoSourceSize,
-           let ratio = TierSelector.upscaleRatio(source: source, drawable: drawableSize) {
-            ratioText = String(format: "%.3f", ratio)
-            let library = shaderLibrary
-            let fullChroma = TierSelector.hasFullResolutionChroma(
-                pixelFormat: getString("video-params/hw-pixelformat") ?? getString("video-params/pixelformat")
-            )
-            let available = Set(RenderTier.allCases.filter { tier in
-                !brokenTiers.contains(tier)
-                    && !(tier == .chroma && fullChroma)
-                    && library.missingShaderNames(named: tier.requiredShaderFileNames).isEmpty
-            })
-            target = TierSelector.select(ratio: ratio, available: available, floor: tierFloor)
-            steppedDown = target < TierSelector.select(ratio: ratio, available: available, floor: .fsrcnnx)
-        } else if isHDR {
-            ratioText = "HDR (no enhancement)"
-        }
-        isTierSteppedDown = steppedDown
-        guard target != activeTier else { return }
-
-        activeTier = target
-        applyShaderStack(
-            paths: shaderLibrary.shaderPaths(named: target.shaderFileNames),
-            scaleOptions: target.scaleOptions,
-            deband: false
-        )
-        refreshBudgetMonitor()
-        logger.info("Render tier: \(target.displayName, privacy: .public) ratio=\(ratioText, privacy: .public) drawable=\(Int(self.drawableSize.width))x\(Int(self.drawableSize.height))")
-        updateBudgetSampling()
+    /// Re-picks with the same statistics for the new drawable. Facts are refreshed too, because
+    /// the bitrate and source size may have become known since the file loaded.
+    private func reselectAutomatic() {
+        guard mpv != nil, renderProfile == .automatic, isFileLoaded else { return }
+        let facts = currentSourceFacts(topazTag: automaticSelection.facts.topazTag)
+        _ = automaticSelection.update(facts: facts, stats: automaticSelection.stats)
+        applyAutomatic(automaticSelection.setDrawable(pixels: drawableSize.width * drawableSize.height))
     }
 
     /// A new budget for the current file: its frame rate and a clean drop history.
@@ -1412,24 +1455,24 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         budgetMonitor = GPUBudgetMonitor(sourceFPS: getDouble("container-fps"), displayFPS: displayRefreshRate)
     }
 
-    private func stepDownTier(reason: String) {
-        guard activeTier != .faithful else { return }
-        tierFloor = activeTier.steppedDown
-        logger.notice("Render tier \(self.activeTier.displayName, privacy: .public) stepped down: \(reason, privacy: .public)")
-        reselectTier()
+    /// The GPU monitor reported over budget: rule out the active profile for the rest of the file.
+    private func stepDownAutomatic(reason: String) {
+        guard let choice = automaticSelection.stepDown() else { return }
+        logger.notice("Automatic profile stepped down to \(choice.profile.displayName, privacy: .public): \(reason, privacy: .public)")
+        applyAutomatic(choice)
     }
 
     private func handleShaderFailure() {
-        guard activeTier != .faithful else { return }
-        brokenTiers.insert(activeTier)
-        stepDownTier(reason: "libplacebo disabled a shader hook")
+        guard renderProfile == .automatic, let choice = automaticSelection.markActiveProfileBroken() else { return }
+        logger.notice("Automatic profile moved to \(choice.profile.displayName, privacy: .public): libplacebo disabled a shader hook")
+        applyAutomatic(choice)
     }
 
-    /// Samples once a second while a non-faithful tier or a manual profile is
-    /// active. Only tiers step down; manual profiles just log their GPU time
-    /// (`log stream --level debug --predicate 'category == "MPVPlayer"'`).
+    /// Samples once a second while any shader profile is active. Under Automatic an
+    /// over-budget reading steps the profile down; a manual profile just logs its GPU time
+    /// (`log stream --level debug --predicate 'subsystem == "com.aagedal.MediaPlayer"'`).
     private func updateBudgetSampling() {
-        guard activeTier != .faithful || renderProfile != .off else {
+        guard activeProfile != .off else {
             budgetSampling?.cancel()
             budgetSampling = nil
             return
@@ -1441,10 +1484,14 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
                 do { try await Task.sleep(for: .seconds(1)) } catch { return }
                 guard let self else { return }
                 guard self.isPlaying, let sample = await self.readBudgetSample() else { continue }
-                self.logger.debug("GPU \(self.renderProfile.rawValue, privacy: .public)/\(self.activeTier.displayName, privacy: .public): \(sample.timing?.totalMilliseconds ?? -1, format: .fixed(precision: 2), privacy: .public) ms samples=\(sample.timing?.minimumSampleCount ?? 0) drops=\(sample.droppedFrames) drawable=\(Int(self.drawableSize.width))x\(Int(self.drawableSize.height))")
-                guard self.activeTier != .faithful else { continue }
-                if self.budgetMonitor.evaluate(sample) == .overBudget {
-                    self.stepDownTier(reason: "over GPU budget")
+                self.logger.debug("GPU \(self.renderProfile.rawValue, privacy: .public)/\(self.activeProfile.rawValue, privacy: .public): \(sample.timing?.totalMilliseconds ?? -1, format: .fixed(precision: 2), privacy: .public) ms samples=\(sample.timing?.minimumSampleCount ?? 0) drops=\(sample.droppedFrames) drawable=\(Int(self.drawableSize.width))x\(Int(self.drawableSize.height))")
+                guard self.renderProfile == .automatic else { continue }
+                // Drops only: the picker already budgets cost at 0.8 of the frame
+                // period, and amp ran picks at ~79 % with zero drops, so the
+                // monitor's 0.5 timing rule would step down for nothing.
+                let dropsOnly = BudgetSample(timing: nil, droppedFrames: sample.droppedFrames, uptime: sample.uptime)
+                if self.budgetMonitor.evaluate(dropsOnly) == .overBudget {
+                    self.stepDownAutomatic(reason: "dropping frames")
                 }
             }
         }

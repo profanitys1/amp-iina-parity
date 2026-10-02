@@ -218,6 +218,32 @@ ffmpeg \
     -c:s srt -metadata:s:s:0 language=eng -metadata:s:s:0 title="English" \
     -disposition:s:0 default "$output_dir/chapters-subtitles-long-gop.mkv"
 
+# FrameAnalyzer fixtures: a bitrate-starved encode (blocky), an ordinary encode carrying a
+# Topaz container tag, a Matroska clip carrying a Topaz stream tag, and a clip shorter than
+# the two seconds the analyzer needs. MP4 keeps custom container tags only with
+# use_metadata_tags; Matroska keeps stream tags natively.
+mkdir -p "$output_dir/analysis"
+ffmpeg \
+    -f lavfi -i "testsrc2=size=1280x720:rate=24:duration=4" \
+    -an -c:v libx264 -preset ultrafast -b:v 300k -pix_fmt yuv420p \
+    -movflags +faststart "$output_dir/analysis/low-bitrate-720p.mp4"
+
+ffmpeg \
+    -f lavfi -i "testsrc2=size=1280x720:rate=24:duration=4" \
+    -an -c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p \
+    -metadata videoai="Enhanced using Proteus v4" \
+    -movflags +faststart+use_metadata_tags "$output_dir/analysis/topaz-container.mp4"
+
+ffmpeg \
+    -f lavfi -i "testsrc2=size=1280x720:rate=24:duration=4" \
+    -an -c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p \
+    -metadata:s:v:0 videoai_provider=Topaz "$output_dir/analysis/topaz-stream.mkv"
+
+ffmpeg \
+    -f lavfi -i "testsrc2=size=1280x720:rate=24:duration=1" \
+    -an -c:v libx264 -preset ultrafast -crf 28 -pix_fmt yuv420p \
+    -movflags +faststart "$output_dir/analysis/short.mp4"
+
 printf '%s\n' \
     'Aagedal Media Player generated media fixtures' \
     'schema=5' \

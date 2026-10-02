@@ -154,12 +154,6 @@ private struct FileAndWindowHandlers: ViewModifier {
             }
             .onReceive(NotificationCenter.default.appCommandPublisher) { notification in
                 guard let command = notification.appCommand,
-                      case .setEnhance(let enabled) = command else { return }
-                // Global preference, like the render profile: every window follows it.
-                controller.mpvPlayer?.setEnhanceEnabled(enabled)
-            }
-            .onReceive(NotificationCenter.default.appCommandPublisher) { notification in
-                guard let command = notification.appCommand,
                       case .openComparisonFile = command else { return }
                 guard WindowManager.shared.isActiveWindow(nsWindow) else { return }
                 openCompareFilePanel()

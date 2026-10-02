@@ -57,11 +57,8 @@ nonisolated enum AppSettings {
     static let demuxerReadaheadSeconds = AppSetting(key: "demuxerReadaheadSeconds", defaultValue: 0.0)
 
     // Rendering
-    static let renderProfile = AppSetting(key: "renderProfile", defaultValue: RenderProfile.off.rawValue)
+    static let renderProfile = AppSetting(key: "renderProfile", defaultValue: RenderProfile.automatic.rawValue)
     static let shaderDirectory = AppSetting(key: "shaderDirectory", defaultValue: "")
-    /// Picks a shader tier automatically from the upscale ratio and GPU
-    /// headroom. Off by default so the picture stays faithful to the source.
-    static let enhance = AppSetting(key: "enhance", defaultValue: false)
     /// "auto", "videotoolbox", "videotoolbox-copy" or "no".
     static let hardwareDecoder = AppSetting(key: "hardwareDecoder", defaultValue: "auto")
     static let hdrEnabled = AppSetting(key: "hdrEnabled", defaultValue: true)
@@ -161,7 +158,6 @@ nonisolated enum AppSettings {
             playbackMuted.key: playbackMuted.defaultValue,
             renderProfile.key: renderProfile.defaultValue,
             shaderDirectory.key: shaderDirectory.defaultValue,
-            enhance.key: enhance.defaultValue,
             hardwareDecoder.key: hardwareDecoder.defaultValue,
             hdrEnabled.key: hdrEnabled.defaultValue,
             loadDisplayICCProfile.key: loadDisplayICCProfile.defaultValue,

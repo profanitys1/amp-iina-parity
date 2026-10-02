@@ -15,8 +15,6 @@ struct RenderSettingsView: View {
     private var renderProfileRaw = AppSettings.renderProfile.defaultValue
     @AppStorage(AppSettings.shaderDirectory.key)
     private var shaderDirectory = AppSettings.shaderDirectory.defaultValue
-    @AppStorage(AppSettings.enhance.key)
-    private var enhance = AppSettings.enhance.defaultValue
     @AppStorage(AppSettings.autoSelectSubtitles.key)
     private var autoSelectSubtitles = AppSettings.autoSelectSubtitles.defaultValue
     @AppStorage(AppSettings.autoPlayOnOpen.key)
@@ -29,7 +27,7 @@ struct RenderSettingsView: View {
     private var targetPeakOverride = AppSettings.toneMappingTargetPeakOverride.defaultValue
 
     private var profile: RenderProfile {
-        RenderProfile(rawValue: renderProfileRaw) ?? .off
+        RenderProfile(rawValue: renderProfileRaw) ?? .automatic
     }
 
     private var library: ShaderLibrary {
@@ -42,17 +40,7 @@ struct RenderSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Enhancement") {
-                Toggle("Enhance", isOn: $enhance)
-                    .onChange(of: enhance) { _, newValue in
-                        NotificationCenter.default.post(.setEnhance(newValue))
-                    }
-                Text("Picks a sharpening or neural upscaling shader from how much the picture is enlarged, and steps down when the GPU cannot keep up. Enhancement alters the image; leave it off for inspection.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Advanced") {
+            Section("Shader Profile") {
                 Picker("Profile", selection: $renderProfileRaw) {
                     ForEach(RenderProfile.allCases) { candidate in
                         Text(candidate.displayName).tag(candidate.rawValue)
@@ -67,11 +55,6 @@ struct RenderSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                if profile != .off {
-                    Text("A manual profile other than Faithful overrides Enhance.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
 
                 if !missingShaderNames.isEmpty {
                     Label(
@@ -127,7 +110,7 @@ struct RenderSettingsView: View {
             }
 
             Section("Heat") {
-                Text("Shaders cost GPU time per frame. With Enhance on, amp measures that cost while playing and drops to a lighter shader when a frame no longer fits.")
+                Text("Shaders cost GPU time per frame. With Automatic, amp measures that cost while playing and drops to a lighter shader when a frame no longer fits.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

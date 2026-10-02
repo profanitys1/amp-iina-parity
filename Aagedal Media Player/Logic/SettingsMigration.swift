@@ -16,7 +16,7 @@ nonisolated enum SettingsMigration {
     static let versionKey = "settingsVersion"
 
     /// Raise by one whenever a step is added below.
-    static let currentVersion = 1
+    static let currentVersion = 2
 
     private static let logger = Logger(subsystem: "com.aagedal.MediaPlayer", category: "settings")
 
@@ -44,6 +44,15 @@ nonisolated enum SettingsMigration {
     /// One step, migrating away from `version`.
     private static func apply(version: Int, in defaults: UserDefaults) {
         switch version {
+        case 1:
+            // Enhance and its ratio ladder are replaced by the Automatic profile. Someone
+            // who had Enhance on with Faithful selected gets Automatic; any other profile
+            // they chose stays. The key is removed either way.
+            let profile = defaults.string(forKey: "renderProfile")
+            if defaults.bool(forKey: "enhance"), profile == nil || profile == RenderProfile.off.rawValue {
+                defaults.set(RenderProfile.automatic.rawValue, forKey: "renderProfile")
+            }
+            defaults.removeObject(forKey: "enhance")
         default:
             break
         }

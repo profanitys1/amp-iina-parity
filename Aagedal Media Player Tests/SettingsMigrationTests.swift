@@ -64,4 +64,46 @@ final class SettingsMigrationTests: XCTestCase {
         XCTAssertEqual(defaults.integer(forKey: "settingsVersion"),
                        SettingsMigration.currentVersion + 5)
     }
+
+    /// What this suite itself stores. `object(forKey:)` would also return a default the app
+    /// registered for the key, which says nothing about whether the migration removed it.
+    private func storedValue(_ key: String) -> Any? {
+        defaults.persistentDomain(forName: suiteName)?[key]
+    }
+
+    func testEnhanceWithFaithfulBecomesAutomaticAndTheKeyIsRemoved() {
+        defaults.set(1, forKey: "settingsVersion")
+        defaults.set(true, forKey: "enhance")
+        defaults.set("off", forKey: "renderProfile")
+        SettingsMigration.migrate(defaults)
+        XCTAssertEqual(defaults.string(forKey: "renderProfile"), "automatic")
+        XCTAssertNil(storedValue("enhance"))
+        XCTAssertEqual(defaults.integer(forKey: "settingsVersion"), SettingsMigration.currentVersion)
+    }
+
+    func testEnhanceWithNoStoredProfileEndsUpAutomatic() {
+        defaults.set(1, forKey: "settingsVersion")
+        defaults.set(true, forKey: "enhance")
+        SettingsMigration.migrate(defaults)
+        XCTAssertEqual(defaults.string(forKey: "renderProfile"), "automatic")
+        XCTAssertNil(storedValue("enhance"))
+    }
+
+    func testEnhanceKeepsAManuallyChosenProfile() {
+        defaults.set(1, forKey: "settingsVersion")
+        defaults.set(true, forKey: "enhance")
+        defaults.set("compressed", forKey: "renderProfile")
+        SettingsMigration.migrate(defaults)
+        XCTAssertEqual(defaults.string(forKey: "renderProfile"), "compressed")
+        XCTAssertNil(storedValue("enhance"))
+    }
+
+    func testEnhanceOffLeavesFaithfulAndRemovesTheKey() {
+        defaults.set(1, forKey: "settingsVersion")
+        defaults.set(false, forKey: "enhance")
+        defaults.set("off", forKey: "renderProfile")
+        SettingsMigration.migrate(defaults)
+        XCTAssertEqual(defaults.string(forKey: "renderProfile"), "off")
+        XCTAssertNil(storedValue("enhance"))
+    }
 }

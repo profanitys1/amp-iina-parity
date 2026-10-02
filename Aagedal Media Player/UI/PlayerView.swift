@@ -222,8 +222,8 @@ struct PlayerView: View {
                 )
                 if controller.useMPV, let mpvPlayer = controller.mpvPlayer {
                     RenderTierBadge(player: mpvPlayer)
-                        .animation(.easeInOut(duration: 0.25), value: mpvPlayer.activeTier)
-                        .animation(.easeInOut(duration: 0.25), value: mpvPlayer.isTierSteppedDown)
+                        .animation(.easeInOut(duration: 0.25), value: mpvPlayer.activeProfile)
+                        .animation(.easeInOut(duration: 0.25), value: mpvPlayer.automaticChoice)
                         .animation(.easeInOut(duration: 0.25), value: mpvPlayer.renderProfile)
                 }
                 Spacer()

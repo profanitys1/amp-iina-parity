@@ -186,11 +186,25 @@ For older reviews with rounded broadcast rates, use **Notes → Migrate Rounded
 Timebases…** to preview and save a corrected copy while keeping recorded frame
 numbers. Use **Open Notes Copy…** to reopen it in a later session.
 
+### Automatic shader profile
+
+By default amp looks at each file when it opens and picks a real-time shader
+profile from your mpv shader folder: HDR stays Faithful, Topaz-enhanced files
+(tagged `videoai`) get a light upscaler, low-bitrate or blocky files get
+Compressed movie, soft upscaled files get Crisp, and everything else gets a
+neural or sharpened upscale. Above 30 fps it picks lighter profiles. The pick
+fits 80 % of the frame period at the current window size, is refined after eight
+frames have been measured, follows window and fullscreen changes, and steps down
+for the rest of the file if the GPU cannot keep up. The badge names the choice,
+for example `Auto · Compressed movie · 2.1 Mbit/s`. Choose any other profile in
+Settings → Rendering → Shader Profile to override it; Faithful turns processing
+off for inspection.
+
 ### Enhancement suggestion
 
-Low-bitrate (<10 Mbit/s) or low-resolution videos show a banner. **Enhance Now**
-applies a real-time shader profile from your mpv shader folder; change it any
-time in Settings → Rendering → Profile.
+While Faithful is selected, low-bitrate (<10 Mbit/s) or low-resolution videos
+show a banner. **Enhance Now** applies a real-time shader profile from your mpv
+shader folder; change it any time in Settings → Rendering → Shader Profile.
 
 ### Playlist and metadata panel
 ⌘I (or the Playlist button) floats a see-through Liquid Glass panel over the

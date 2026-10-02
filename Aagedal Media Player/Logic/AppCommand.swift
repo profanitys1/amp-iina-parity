@@ -41,7 +41,6 @@ enum AppCommand {
     case toggleScopeParade
     case toggleAudioWaveform
     case setRenderProfile(RenderProfile)
-    case setEnhance(Bool)
     case openComparisonFile
     case toggleInspectionLoupe
     case toggleReviewNotes

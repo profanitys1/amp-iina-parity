@@ -76,8 +76,24 @@ final class RenderProfileTests: XCTestCase {
         }
     }
 
-    func testDefaultProfileIsFaithful() {
-        XCTAssertEqual(AppSettings.renderProfile.defaultValue, RenderProfile.off.rawValue)
+    func testDefaultProfileIsAutomatic() {
+        XCTAssertEqual(AppSettings.renderProfile.defaultValue, RenderProfile.automatic.rawValue)
+    }
+
+    func testAutomaticLoadsNoShadersItselfAndIsListedFirst() {
+        XCTAssertEqual(RenderProfile.automatic.shaderFileNames, [])
+        XCTAssertFalse(RenderProfile.automatic.enablesDeband)
+        XCTAssertEqual(RenderProfile.allCases.first, .automatic)
+        XCTAssertEqual(RenderProfile.automatic.displayName, "Automatic")
+    }
+
+    func testLibraryResolvesNameLists() throws {
+        try writeShader("ravu-zoom-ar-r3.hook")
+        let library = ShaderLibrary(directoryPath: shaderDirectory.path)
+        let names = ["ravu-zoom-ar-r3.hook", "ArtCNN_C4F16.glsl"]
+        XCTAssertEqual(library.shaderPaths(named: names).count, 1)
+        XCTAssertTrue(library.shaderPaths(named: names).first?.hasSuffix("ravu-zoom-ar-r3.hook") == true)
+        XCTAssertEqual(library.missingShaderNames(named: names), ["ArtCNN_C4F16.glsl"])
     }
 
     func testOnlyRestorationEnablesDeband() {
