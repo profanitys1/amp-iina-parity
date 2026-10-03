@@ -355,9 +355,9 @@ final class MPVViewController: NSViewController {
         }
     }
 
-    /// Tells mpv the refresh rate of the display the window is actually on.
-    /// mpv has no way to query this on macOS and otherwise assumes 60 Hz, which
-    /// mistimes frames on a 120 Hz panel or a 50 Hz external monitor.
+    /// Tells mpv which display the window is on. The MPVKit fork detects the
+    /// refresh rate via CVDisplayLink bound to screen-name; we pass the display
+    /// ID so the fork can bind to the correct display.
     private func applyDisplayRefreshRate() {
         guard let screen = view.window?.screen else { return }
         let displayID = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? 0

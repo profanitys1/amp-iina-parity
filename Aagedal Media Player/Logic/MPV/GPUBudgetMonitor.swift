@@ -62,9 +62,12 @@ nonisolated struct GPUBudgetMonitor: Sendable {
     let budgetMilliseconds: Double?
     private var dropHistory: [(uptime: TimeInterval, count: Int)] = []
 
-    init(sourceFPS: Double, displayFPS: Double) {
-        let slowest = [sourceFPS, displayFPS].filter { $0.isFinite && $0 > 0 }.min()
-        budgetMilliseconds = slowest.map { Self.budgetFraction * 1000 / $0 }
+    init(sourceFPS: Double, displayFPS: Double, interpolating: Bool = false) {
+        // With interpolation, mpv presents at display rate (e.g. 120 Hz),
+        // so the budget is the display period. Without interpolation,
+        // fresh frames are needed only at the slower of source/display.
+        let rate = interpolating ? displayFPS : [sourceFPS, displayFPS].filter { $0.isFinite && $0 > 0 }.min() ?? 0
+        budgetMilliseconds = rate > 0 ? Self.budgetFraction * 1000 / rate : nil
     }
 
     mutating func evaluate(_ sample: BudgetSample) -> Verdict {

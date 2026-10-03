@@ -80,7 +80,7 @@ nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable, Co
         case .upscaleStrong:
             ["ArtCNN_C4F32.glsl", "CfL_Prediction.glsl"]
         case .compressedGrain:
-            ["hdeband.glsl", "ArtCNN_C4F16_DS.glsl", "CfL_Prediction.glsl", "noise_static_luma.hook"]
+            ["hdeband.glsl", "ArtCNN_C4F16_DS.glsl", "CfL_Prediction.glsl", "filmgrain-smooth-SDR-light.glsl"]
         case .restore:
             ["nlmeans.glsl", "ravu-zoom-ar-r3.hook", "CfL_Prediction.glsl", "noise_static_luma.hook"]
         }

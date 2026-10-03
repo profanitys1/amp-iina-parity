@@ -349,9 +349,11 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         // mpv's default tscale, pinned so a future default change cannot blur.
         checkError(mpv_set_option_string(mpv, "hwdec-extra-frames", "4"), context: "hwdec-extra-frames")
         checkError(mpv_set_option_string(mpv, "tscale", "oversample"), context: "tscale")
-        if displayRefreshRate > 0 {
-            checkError(mpv_set_option_string(mpv, "display-fps-override", String(format: "%.3f", displayRefreshRate)), context: "display-fps-override")
-        }
+        // display-fps-override is intentionally NOT set here. The MPVKit fork
+        // detects the refresh rate via CVDisplayLink bound to the screen-name.
+        // Setting the override defeats that detection and can ruin playback on
+        // variable-refresh displays (ProMotion drops below 120 Hz for static
+        // content, battery, Low Power Mode).
         if displayID != 0 {
             checkError(mpv_set_option_string(mpv, "screen-name", String(displayID)), context: "screen-name")
         }
@@ -1476,7 +1478,8 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
 
     /// A new budget for the current file: its frame rate and a clean drop history.
     private func refreshBudgetMonitor() {
-        budgetMonitor = GPUBudgetMonitor(sourceFPS: getDouble("container-fps"), displayFPS: displayRefreshRate)
+        let interpolating = renderProfile != .off
+        budgetMonitor = GPUBudgetMonitor(sourceFPS: getDouble("container-fps"), displayFPS: displayRefreshRate, interpolating: interpolating)
     }
 
     /// The GPU monitor reported over budget: rule out the active profile for the rest of the file.
@@ -1624,16 +1627,13 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
         }
     }
 
-    /// mpv cannot query the display on macOS, so the app has to tell it.
-    /// Without a refresh rate mpv assumes 60 Hz and mistimes frames on a 120 Hz
-    /// panel or an external monitor running at 50. The display ID goes to the
-    /// MPVKit fork's moltenvk context through `screen-name`, which binds its
-    /// vsync display link to that screen. Values set before the context exists
-    /// are applied by `setupMPV`.
+    /// Updates the display ID and refresh rate for the MPVKit fork's moltenvk
+    /// context. The fork detects the refresh rate via CVDisplayLink bound to
+    /// `screen-name`; we no longer set display-fps-override because doing so
+    /// defeats that detection and can ruin playback on variable-refresh displays.
     func applyDisplay(refreshRate fps: Double, displayID id: UInt32) {
         if fps > 0 {
             displayRefreshRate = fps
-            setString("display-fps-override", String(format: "%.3f", fps))
         }
         if id != 0, id != displayID {
             displayID = id
