@@ -103,7 +103,7 @@ nonisolated enum SourceClassifier {
         // Below 720p, bits per pixel overstates quality (640x352 at 1.5 Mbit/s is 0.22),
         // and the 2026-10-02 benchmark scored the Compressed movie stack best on exactly
         // such 360p phone-grade encodes. The short side handles portrait video.
-        if facts.width > 0, facts.height > 0, min(facts.width, facts.height) < 720 {
+        if facts.width > 0, facts.height > 0, min(facts.width, facts.height) <= 720 {
             return SourceClassification(sourceClass: .compressed, reason: "low-res \(facts.width)x\(facts.height)")
         }
         if let bitsPerPixel = facts.bitsPerPixel, bitsPerPixel < thresholds.lowBitsPerPixel {
