@@ -17,17 +17,66 @@ struct WindowConfigurator: NSViewRepresentable {
     let showTrafficLights: Bool
     var onWindowAvailable: ((NSWindow) -> Void)?
 
+    /// Native fullscreen reveals and hides its own titlebar, so hover must not
+    /// fade the traffic lights there: AppKit slides the titlebar down over a
+    /// view amp already made transparent, and the dots arrive invisible.
+    nonisolated static func trafficLightAlpha(showTrafficLights: Bool, isFullScreen: Bool) -> CGFloat {
+        (showTrafficLights || isFullScreen) ? 1 : 0
+    }
+
+    /// Only the first media load in a window fills the screen. Later loads —
+    /// folder next/previous, a mid-file resolution change — leave the size the
+    /// user picked alone.
+    nonisolated static func shouldMaximize(
+        hasMaximizedForMedia: Bool,
+        isFullScreen: Bool,
+        openMaximized: Bool
+    ) -> Bool {
+        openMaximized && !hasMaximizedForMedia && !isFullScreen
+    }
+
+    /// Once a window has filled the screen its size belongs to the user, so
+    /// neither a later source change nor a fullscreen exit may reshape it.
+    nonisolated static func mayResizeToSource(
+        hasMaximizedForMedia: Bool,
+        openMaximized: Bool
+    ) -> Bool {
+        !(openMaximized && hasMaximizedForMedia)
+    }
+
+    nonisolated static func minContentSize(for ratio: CGFloat?) -> NSSize {
+        guard let ratio, ratio > 0 else {
+            return NSSize(width: baseMinWidth, height: baseMinHeight)
+        }
+        return NSSize(
+            width: max(baseMinWidth, baseMinHeight * ratio),
+            height: max(baseMinHeight, baseMinWidth / ratio)
+        )
+    }
+
     final class Coordinator: NSObject {
         var lastAspectRatio: CGFloat?
         var savedAspectRatio: CGFloat?
         var lastSourceSize: NSSize?
         weak var observedWindow: NSWindow?
         nonisolated(unsafe) var willEnterFullScreen: NSObjectProtocol?
+        nonisolated(unsafe) var didEnterFullScreen: NSObjectProtocol?
         nonisolated(unsafe) var didExitFullScreen: NSObjectProtocol?
+        /// Set for the duration of the enter transition. `styleMask` does not
+        /// carry `.fullScreen` until the animation finishes, so without this a
+        /// SwiftUI update mid-transition would read "not fullscreen" and fade
+        /// the traffic lights out again.
+        var isEnteringFullScreen = false
         var lastTrafficLightAlpha: CGFloat = 0
+        /// Hover state at the last SwiftUI update, so exiting fullscreen can
+        /// restore the fade instead of leaving the dots pinned visible.
+        var lastShowTrafficLights = false
+        /// Sticky per window: the first media load owns the screen fill.
+        var hasMaximizedForMedia = false
 
         deinit {
             if let token = willEnterFullScreen { NotificationCenter.default.removeObserver(token) }
+            if let token = didEnterFullScreen { NotificationCenter.default.removeObserver(token) }
             if let token = didExitFullScreen { NotificationCenter.default.removeObserver(token) }
         }
 
@@ -53,14 +102,110 @@ struct WindowConfigurator: NSViewRepresentable {
 
         /// Set contentMinSize based on the aspect ratio (or base values if nil).
         func applyMinSize(_ window: NSWindow, ratio: CGFloat?) {
-            if let ratio, ratio > 0 {
-                let minW = max(WindowConfigurator.baseMinWidth, WindowConfigurator.baseMinHeight * ratio)
-                let minH = max(WindowConfigurator.baseMinHeight, WindowConfigurator.baseMinWidth / ratio)
-                window.contentMinSize = NSSize(width: minW, height: minH)
-            } else {
-                window.contentMinSize = NSSize(width: WindowConfigurator.baseMinWidth,
-                                               height: WindowConfigurator.baseMinHeight)
+            window.contentMinSize = WindowConfigurator.minContentSize(for: ratio)
+        }
+
+        /// Fill the screen with the picture. The aspect lock has to go first:
+        /// AppKit reshapes setFrame to the locked ratio and would letterbox the
+        /// window rather than the picture. The minimum drops to the base size
+        /// for the same reason — a portrait source asks for a minimum taller
+        /// than the screen, which blocks the fill outright.
+        ///
+        /// The target is `visibleFrame`, not `frame`. AppKit's
+        /// `constrainFrameRect` clamps a titled window to the visible area, so
+        /// the menu bar and Dock stay reachable. Asking for the full screen
+        /// rect with no aspect lock raises an NSException inside
+        /// `-[NSWindow _reallySetFrame:]` and takes the app down.
+        func maximize(_ window: NSWindow) {
+            window.contentAspectRatio = .zero
+            applyMinSize(window, ratio: nil)
+            guard let screen = window.screen ?? NSScreen.main else { return }
+            window.setFrame(screen.visibleFrame, display: true, animate: false)
+        }
+
+        /// Sizes the window for a freshly loaded source. The first load in a
+        /// window fills the screen; every later load leaves that size alone,
+        /// because by then it is the size the user chose.
+        func applyInitialSize(
+            _ window: NSWindow,
+            ratio: CGFloat,
+            sourceSize: NSSize?,
+            isFullScreen: Bool,
+            openMaximized: Bool
+        ) {
+            if WindowConfigurator.shouldMaximize(
+                hasMaximizedForMedia: hasMaximizedForMedia,
+                isFullScreen: isFullScreen,
+                openMaximized: openMaximized
+            ) {
+                hasMaximizedForMedia = true
+                maximize(window)
+                return
             }
+            guard WindowConfigurator.mayResizeToSource(
+                hasMaximizedForMedia: hasMaximizedForMedia,
+                openMaximized: openMaximized
+            ) else { return }
+
+            applyMinSize(window, ratio: ratio)
+            window.contentAspectRatio = NSSize(width: ratio, height: 1)
+            guard let contentView = window.contentView else { return }
+
+            let frame = window.frame
+            let titlebarHeight = frame.height - contentView.bounds.height
+
+            let useSourceResolution = UserDefaults.standard.value(for: AppSettings.openAtSourceResolution)
+
+            var newWidth: CGFloat
+            var newHeight: CGFloat
+
+            if useSourceResolution,
+               let sourceSize,
+               sourceSize.width > 0, sourceSize.height > 0 {
+                // Size to source resolution at 1:1 pixels (divide by backing scale for Retina)
+                let backingScale = window.backingScaleFactor
+                newWidth = sourceSize.width / backingScale
+                newHeight = sourceSize.height / backingScale
+                if UserDefaults.standard.value(for: AppSettings.clampWindowToScreen),
+                   let screen = window.screen ?? NSScreen.main {
+                    let maxFrame = screen.visibleFrame
+                    let maxW = maxFrame.width * 0.9
+                    let maxH = (maxFrame.height - titlebarHeight) * 0.9
+                    if newWidth > maxW || newHeight > maxH {
+                        let scale = min(maxW / newWidth, maxH / newHeight)
+                        newWidth *= scale
+                        newHeight *= scale
+                    }
+                }
+            } else {
+                // Default: adjust height from current width
+                newWidth = contentView.bounds.width
+                if ratio < 0.75 {
+                    newWidth = min(newWidth, 380)
+                }
+                newHeight = newWidth / ratio
+            }
+
+            let totalHeight = newHeight + titlebarHeight
+            let centerAfterResize = UserDefaults.standard.value(for: AppSettings.centerWindowAfterResize)
+            let origin: NSPoint
+            if centerAfterResize,
+               let screen = window.screen ?? NSScreen.main {
+                let visibleFrame = screen.visibleFrame
+                origin = NSPoint(
+                    x: visibleFrame.midX - newWidth / 2,
+                    y: visibleFrame.midY - totalHeight / 2
+                )
+            } else {
+                origin = NSPoint(
+                    x: frame.origin.x,
+                    y: frame.origin.y + frame.height - totalHeight
+                )
+            }
+            window.setFrame(
+                NSRect(x: origin.x, y: origin.y, width: newWidth, height: totalHeight),
+                display: true, animate: false
+            )
         }
 
         func observeWindow(_ window: NSWindow) {
@@ -73,9 +218,26 @@ struct WindowConfigurator: NSViewRepresentable {
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
                     guard let self else { return }
+                    self.isEnteringFullScreen = true
                     self.savedAspectRatio = self.lastAspectRatio
                     self.lastAspectRatio = nil
                     window.contentResizeIncrements = NSSize(width: 1, height: 1)
+                    // Fade the dots back in before AppKit takes the titlebar
+                    // over: whatever hover left behind would otherwise ride
+                    // into fullscreen and reveal as a transparent titlebar.
+                    self.lastTrafficLightAlpha = 1
+                    self.applyTrafficLightAlpha(window, animated: false)
+                }
+            }
+
+            didEnterFullScreen = NotificationCenter.default.addObserver(
+                forName: NSWindow.didEnterFullScreenNotification,
+                object: window, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated {
+                    // The style mask now carries .fullScreen, so updateNSView
+                    // keeps the dots opaque on its own from here.
+                    self?.isEnteringFullScreen = false
                 }
             }
 
@@ -84,9 +246,22 @@ struct WindowConfigurator: NSViewRepresentable {
                 object: window, queue: .main
             ) { [weak self] _ in
                 MainActor.assumeIsolated {
-                    guard let self, let ratio = self.savedAspectRatio, ratio > 0 else { return }
-                    window.contentAspectRatio = NSSize(width: ratio, height: 1)
-                    self.lastAspectRatio = ratio
+                    guard let self else { return }
+                    self.isEnteringFullScreen = false
+                    if let ratio = self.savedAspectRatio, ratio > 0 {
+                        self.lastAspectRatio = ratio
+                        // A maximized window is screen-shaped and its size now
+                        // belongs to the user, so re-locking the ratio there
+                        // would only fight the next manual resize.
+                        if !self.hasMaximizedForMedia {
+                            window.contentAspectRatio = NSSize(width: ratio, height: 1)
+                        }
+                    }
+                    self.lastTrafficLightAlpha = WindowConfigurator.trafficLightAlpha(
+                        showTrafficLights: self.lastShowTrafficLights,
+                        isFullScreen: false
+                    )
+                    self.applyTrafficLightAlpha(window)
                 }
             }
         }
@@ -150,10 +325,21 @@ struct WindowConfigurator: NSViewRepresentable {
 
         let ratio = aspectRatio
         let sourceSize = videoSourceSize
-        let trafficLightAlpha: CGFloat = showTrafficLights ? 1 : 0
+        let showsTrafficLights = showTrafficLights
+        // The enter transition counts as fullscreen too: the style mask only
+        // acquires .fullScreen once the animation completes, and an update
+        // landing mid-transition would otherwise fade the dots back out.
         let isFullScreen = window.styleMask.contains(.fullScreen)
+            || coordinator.isEnteringFullScreen
+        let trafficLightAlpha = Self.trafficLightAlpha(
+            showTrafficLights: showsTrafficLights,
+            isFullScreen: isFullScreen
+        )
+        let openMaximized = UserDefaults.standard.value(for: AppSettings.openMaximized)
 
         DispatchQueue.main.async {
+            coordinator.lastShowTrafficLights = showsTrafficLights
+
             // Aspect ratio and min size — only apply when not in fullscreen,
             // and only when the ratio actually changes.
             if !isFullScreen {
@@ -165,69 +351,13 @@ struct WindowConfigurator: NSViewRepresentable {
                         coordinator.lastAspectRatio = ratio
                         coordinator.savedAspectRatio = ratio
                         coordinator.lastSourceSize = sourceSize
-                        coordinator.applyMinSize(window, ratio: ratio)
-                        window.contentAspectRatio = NSSize(width: ratio, height: 1)
-
-                        if let contentView = window.contentView {
-                            let frame = window.frame
-                            let titlebarHeight = frame.height - contentView.bounds.height
-
-                            let useSourceResolution = UserDefaults.standard.value(for: AppSettings.openAtSourceResolution)
-
-                            var newWidth: CGFloat
-                            var newHeight: CGFloat
-
-                            if useSourceResolution,
-                               let sourceSize,
-                               sourceSize.width > 0, sourceSize.height > 0 {
-                                // Size to source resolution at 1:1 pixels (divide by backing scale for Retina)
-                                let backingScale = window.backingScaleFactor
-                                newWidth = sourceSize.width / backingScale
-                                newHeight = sourceSize.height / backingScale
-                                if UserDefaults.standard.value(for: AppSettings.clampWindowToScreen),
-                                   let screen = window.screen ?? NSScreen.main {
-                                    let maxFrame = screen.visibleFrame
-                                    let maxW = maxFrame.width * 0.9
-                                    let maxH = (maxFrame.height - titlebarHeight) * 0.9
-                                    if newWidth > maxW || newHeight > maxH {
-                                        let scale = min(maxW / newWidth, maxH / newHeight)
-                                        newWidth *= scale
-                                        newHeight *= scale
-                                    }
-                                }
-                            } else {
-                                // Default: adjust height from current width
-                                newWidth = contentView.bounds.width
-                                if ratio < 0.75 {
-                                    newWidth = min(newWidth, 380)
-                                }
-                                newHeight = newWidth / ratio
-                            }
-
-                            let totalHeight = newHeight + titlebarHeight
-                            let centerAfterResize = UserDefaults.standard.value(for: AppSettings.centerWindowAfterResize)
-                            let origin: NSPoint
-                            if centerAfterResize,
-                               let screen = window.screen ?? NSScreen.main {
-                                let visibleFrame = screen.visibleFrame
-                                origin = NSPoint(
-                                    x: visibleFrame.midX - newWidth / 2,
-                                    y: visibleFrame.midY - totalHeight / 2
-                                )
-                            } else {
-                                origin = NSPoint(
-                                    x: frame.origin.x,
-                                    y: frame.origin.y + frame.height - totalHeight
-                                )
-                            }
-                            let contentRect = NSRect(
-                                x: origin.x,
-                                y: origin.y,
-                                width: newWidth,
-                                height: totalHeight
-                            )
-                            window.setFrame(contentRect, display: true, animate: false)
-                        }
+                        coordinator.applyInitialSize(
+                            window,
+                            ratio: ratio,
+                            sourceSize: sourceSize,
+                            isFullScreen: isFullScreen,
+                            openMaximized: openMaximized
+                        )
                     }
                 } else {
                     if coordinator.lastAspectRatio != nil {

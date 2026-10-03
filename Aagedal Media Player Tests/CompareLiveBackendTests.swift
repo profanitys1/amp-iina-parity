@@ -65,8 +65,17 @@ final class CompareLiveBackendTests: XCTestCase {
 
     private var retainedPlaybackSurfaces: [RetainedPlaybackSurface] = []
 
+    /// Saved so tearDown can put the developer's own value back.
+    private nonisolated(unsafe) static var savedOpenMaximized: Any?
+
     override func setUp() async throws {
         try await super.setUp()
+        // The window configurator would otherwise fill the screen with the
+        // hosted ContentView, enlarging every Metal layer the deadlines in
+        // this suite are measured against.
+        Self.savedOpenMaximized = UserDefaults.standard
+            .object(forKey: AppSettings.openMaximized.key)
+        UserDefaults.standard.set(false, forKey: AppSettings.openMaximized.key)
         guard ProcessInfo.processInfo.environment["COMPARE_PROFILE_REPORT"] == "1" else { return }
         let expectsReflection = ProcessInfo.processInfo.environment["COMPARE_PROFILE_REFLECTED"] == "1"
         let fixtures = try fixtureDirectory()
@@ -86,7 +95,16 @@ final class CompareLiveBackendTests: XCTestCase {
             }
             retainedPlaybackSurfaces.removeAll()
         }
+        Self.restoreOpenMaximized()
         try await super.tearDown()
+    }
+
+    private nonisolated static func restoreOpenMaximized() {
+        if let value = savedOpenMaximized {
+            UserDefaults.standard.set(value, forKey: AppSettings.openMaximized.key)
+        } else {
+            UserDefaults.standard.removeObject(forKey: AppSettings.openMaximized.key)
+        }
     }
 
     func testMPVSurfaceInitializesAtFittedSizeAndUpdatesRetainedDrawableAfterResize() async throws {

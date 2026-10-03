@@ -19,6 +19,10 @@ final class SettingsCoverageTests: XCTestCase {
         "updateLastChecked",
         "updateCheckInterval",
         "settingsVersion",
+        // The screen fill is the shipped open behaviour rather than a
+        // preference; the key exists so tests can stop the configurator
+        // resizing their capture host.
+        "openMaximized",
     ]
 
     private var repository: URL {

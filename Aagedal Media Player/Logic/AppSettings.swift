@@ -25,6 +25,11 @@ nonisolated enum AppSettings {
     static let precisionScrubFactor = AppSetting(key: "precisionScrubFactor", defaultValue: 10.0)
     static let showTimelineDetails = AppSetting(key: "showTimelineDetails", defaultValue: true)
     static let openAtSourceResolution = AppSetting(key: "openAtSourceResolution", defaultValue: true)
+    /// The first movie in a window fills the screen instead of opening at the
+    /// source resolution. Deliberately absent from the Settings UI: this is the
+    /// shipped open behaviour, and the key exists so tests can stop the
+    /// configurator resizing their capture host.
+    static let openMaximized = AppSetting(key: "openMaximized", defaultValue: true)
     static let clampWindowToScreen = AppSetting(key: "clampWindowToScreen", defaultValue: true)
     static let centerWindowAfterResize = AppSetting(key: "centerWindowAfterResize", defaultValue: true)
     static let playbackVolume = AppSetting(key: "playbackVolume", defaultValue: 100.0)
@@ -152,6 +157,7 @@ nonisolated enum AppSettings {
             precisionScrubFactor.key: precisionScrubFactor.defaultValue,
             showTimelineDetails.key: showTimelineDetails.defaultValue,
             openAtSourceResolution.key: openAtSourceResolution.defaultValue,
+            openMaximized.key: openMaximized.defaultValue,
             clampWindowToScreen.key: clampWindowToScreen.defaultValue,
             centerWindowAfterResize.key: centerWindowAfterResize.defaultValue,
             playbackVolume.key: playbackVolume.defaultValue,

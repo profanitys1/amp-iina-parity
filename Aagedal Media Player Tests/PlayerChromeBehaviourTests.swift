@@ -29,6 +29,7 @@ final class PlayerChromeBehaviourTests: XCTestCase {
     private nonisolated(unsafe) static var savedPositionHorizontal: Any?
     private nonisolated(unsafe) static var savedPositionVertical: Any?
     private nonisolated(unsafe) static var savedOpenAtSourceResolution: Any?
+    private nonisolated(unsafe) static var savedOpenMaximized: Any?
     private nonisolated(unsafe) static var savedAutoSelectSubtitles: Any?
 
     override func setUp() {
@@ -249,9 +250,13 @@ final class PlayerChromeBehaviourTests: XCTestCase {
             .object(forKey: AppSettings.controlBarPositionVertical.key)
         savedOpenAtSourceResolution = UserDefaults.standard
             .object(forKey: AppSettings.openAtSourceResolution.key)
+        savedOpenMaximized = UserDefaults.standard
+            .object(forKey: AppSettings.openMaximized.key)
         // The window configurator would otherwise resize the hosting window to
-        // the 320x180 fixture clip, leaving the chrome no room to differ.
+        // the 320x180 fixture clip, or fill the screen with it, leaving the
+        // chrome no room to differ.
         UserDefaults.standard.set(false, forKey: AppSettings.openAtSourceResolution.key)
+        UserDefaults.standard.set(false, forKey: AppSettings.openMaximized.key)
         // The subtitle test expects the shipped default; a developer who turned
         // it off in the app would otherwise fail it.
         savedAutoSelectSubtitles = UserDefaults.standard
@@ -263,6 +268,7 @@ final class PlayerChromeBehaviourTests: XCTestCase {
         restore(savedPositionHorizontal, forKey: AppSettings.controlBarPositionHorizontal.key)
         restore(savedPositionVertical, forKey: AppSettings.controlBarPositionVertical.key)
         restore(savedOpenAtSourceResolution, forKey: AppSettings.openAtSourceResolution.key)
+        restore(savedOpenMaximized, forKey: AppSettings.openMaximized.key)
         restore(savedAutoSelectSubtitles, forKey: AppSettings.autoSelectSubtitles.key)
     }
 
