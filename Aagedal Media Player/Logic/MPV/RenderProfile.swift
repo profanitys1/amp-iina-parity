@@ -74,7 +74,7 @@ nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable, Co
         // hdeband runs first and replaces mpv's own deband (its author's
         // instruction), so these profiles keep `enablesDeband` false.
         case .compressed:
-            ["hdeband.glsl", "ArtCNN_C4F16_DS.glsl", "CfL_Prediction.glsl", "PixelClipper.glsl", "KrigBilateral.glsl"]
+            ["hdeband.glsl", "nlmeans.glsl", "ArtCNN_C4F16_DS.glsl", "CfL_Prediction.glsl", "PixelClipper.glsl", "KrigBilateral.glsl"]
         case .crisp:
             ["ArtCNN_C4F16_DS.glsl", "CfL_Prediction.glsl", "adaptive-sharpen.glsl", "PixelClipper.glsl", "KrigBilateral.glsl"]
         case .upscaleStrong:
