@@ -34,9 +34,11 @@ final class RenderProfileTests: XCTestCase {
         let library = ShaderLibrary(directoryPath: shaderDirectory.path)
         let paths = library.shaderPaths(for: .upscaleLight)
 
-        XCTAssertEqual(paths.count, 2)
+        XCTAssertEqual(paths.count, 4)
         XCTAssertTrue(paths[0].hasSuffix("ArtCNN_C4F16.glsl"), "the upscaler must run before chroma reconstruction")
         XCTAssertTrue(paths[1].hasSuffix("CfL_Prediction.glsl"))
+        XCTAssertTrue(paths[2].hasSuffix("PixelClipper.glsl"))
+        XCTAssertTrue(paths[3].hasSuffix("KrigBilateral.glsl"))
         XCTAssertEqual(library.shaderOptionValue(for: .upscaleLight), paths.joined(separator: ":"))
         XCTAssertEqual(library.missingShaderNames(for: .upscaleLight), [])
     }
@@ -46,7 +48,10 @@ final class RenderProfileTests: XCTestCase {
 
         let library = ShaderLibrary(directoryPath: shaderDirectory.path)
 
-        XCTAssertEqual(library.missingShaderNames(for: .upscaleLight), ["ArtCNN_C4F16.glsl"])
+        XCTAssertEqual(
+            library.missingShaderNames(for: .upscaleLight),
+            ["ArtCNN_C4F16.glsl", "PixelClipper.glsl", "KrigBilateral.glsl"]
+        )
         XCTAssertEqual(library.shaderPaths(for: .upscaleLight).count, 1)
         XCTAssertTrue(library.shaderOptionValue(for: .upscaleLight).hasSuffix("CfL_Prediction.glsl"))
     }
