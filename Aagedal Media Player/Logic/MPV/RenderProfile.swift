@@ -70,17 +70,17 @@ nonisolated enum RenderProfile: String, CaseIterable, Sendable, Identifiable, Co
         case .sharpen:
             ["SSimSuperRes.glsl"]
         case .upscaleLight:
-            ["ArtCNN_C4F16.glsl", "CfL_Prediction.glsl", "PixelClipper.glsl"]
+            ["ArtCNN_C4F16.glsl", "CfL_Prediction.glsl", "PixelClipper.glsl", "KrigBilateral.glsl"]
         // hdeband runs first and replaces mpv's own deband (its author's
         // instruction), so these profiles keep `enablesDeband` false.
         case .compressed:
-            ["hdeband.glsl", "ArtCNN_C4F16_DS.glsl", "CfL_Prediction.glsl", "PixelClipper.glsl"]
+            ["hdeband.glsl", "ArtCNN_C4F16_DS.glsl", "CfL_Prediction.glsl", "PixelClipper.glsl", "KrigBilateral.glsl"]
         case .crisp:
-            ["ArtCNN_C4F16_DS.glsl", "CfL_Prediction.glsl", "adaptive-sharpen.glsl", "PixelClipper.glsl"]
+            ["ArtCNN_C4F16_DS.glsl", "CfL_Prediction.glsl", "adaptive-sharpen.glsl", "PixelClipper.glsl", "KrigBilateral.glsl"]
         case .upscaleStrong:
             ["ArtCNN_C4F32.glsl", "CfL_Prediction.glsl"]
         case .compressedGrain:
-            ["hdeband.glsl", "ArtCNN_C4F16_DS.glsl", "CfL_Prediction.glsl", "filmgrain-smooth-SDR-light.glsl"]
+            ["hdeband.glsl", "ArtCNN_C4F16_DS.glsl", "CfL_Prediction.glsl", "filmgrain-smooth-SDR-light.glsl", "KrigBilateral.glsl"]
         case .restore:
             ["nlmeans.glsl", "ravu-zoom-ar-r3.hook", "CfL_Prediction.glsl", "noise_static_luma.hook"]
         }

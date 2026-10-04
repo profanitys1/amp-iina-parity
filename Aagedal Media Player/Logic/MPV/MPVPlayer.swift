@@ -1362,13 +1362,37 @@ final class MPVPlayer: NSObject, ObservableObject, @unchecked Sendable {
     /// Applies a concrete profile's shaders and scaler options to the running player.
     private func apply(profile: RenderProfile) {
         activeProfile = profile
+        let rawPaths = shaderLibrary.shaderPaths(for: profile)
+        let filteredPaths = filterShadersForSource(rawPaths)
         applyShaderStack(
-            paths: shaderLibrary.shaderPaths(for: profile),
+            paths: filteredPaths,
             scaleOptions: profile.scaleOptions,
             deband: profile.enablesDeband
         )
         refreshBudgetMonitor()
         updateBudgetSampling()
+    }
+
+    /// Filters shader paths based on source properties to avoid inappropriate shaders:
+    /// - KrigBilateral.glsl: Skip for 4:2:2 sources (trained on 4:2:0, may produce artifacts)
+    /// - FSRCNNX shaders: Skip for >60Hz displays (too expensive for high refresh rates)
+    private func filterShadersForSource(_ paths: [String]) -> [String] {
+        var filtered = paths
+        
+        // Check if source is 4:2:2 (yuv422p, yuv422p10le, etc.)
+        let is422 = pixelFormat?.contains("422") == true
+        if is422 {
+            // KrigBilateral was trained on 4:2:0, skip for 4:2:2 to avoid color artifacts
+            filtered = filtered.filter { !$0.contains("KrigBilateral") }
+        }
+        
+        // Check display refresh rate - skip expensive neural scalers for >60Hz
+        if displayRefreshRate > 60 {
+            // FSRCNNX is too expensive for high refresh rates (>60Hz)
+            filtered = filtered.filter { !$0.contains("FSRCNNX") }
+        }
+        
+        return filtered
     }
 
     /// Replaces the shader list one path at a time, so a directory containing
