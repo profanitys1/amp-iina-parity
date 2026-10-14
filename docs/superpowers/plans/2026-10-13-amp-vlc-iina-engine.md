@@ -1911,7 +1911,7 @@ In `UI/ComparePlayerView.swift`, insert after the `comparisonSurfaces(...)` bloc
 - The wheel changes volume and jumps 3 s.
 - The OSC card, loupe hover and Compare wipe still work.
 
-If clicks on empty video stop reaching the surface once Part 4.8 makes the OSC overlay full-size, apply `.allowsHitTesting(false)` to the `GeometryReader` and `.allowsHitTesting(true)` to the card. If that is not enough, measure with `onGeometryChange(for:of:action:)` (macOS 13+) instead of a full-size `GeometryReader`.
+If clicks on empty video stop reaching the surface once Part 4.8 makes the OSC overlay full-size, the Apple-endorsed fix is a `hitTest` override (Apple DTS, forum 812113, Jan 2026, macOS 26.2, FB21579636): host the overlay in an `NSHostingView` subclass whose `hitTest` returns `nil` outside the card's frame, and keep the card's gesture and hover on the card itself. A cheaper first attempt is to measure the card with `onGeometryChange(for:of:action:)` (macOS 13+) instead of a full-size `GeometryReader`.
 
 Commit: `Add VLC's video mouse surface`
 
@@ -2378,7 +2378,7 @@ In `Aagedal_Media_PlayerApp.swift`, add `@FocusedValue(\.isFloatingOnTop) privat
 - Change the aspect in window A, then switch to window B.
 - Open each menu: the checkmarks and items must reflect B.
 
-If they stay stale, replace the Toggle rows with Buttons whose titles carry a "✓ " prefix computed from the same bindings.
+Picker rows may refresh only when the menu opens (TrozWare 2025), which is fine here. If rows are stale on open, use the published pattern instead: `focusedSceneValue` of an optional `Binding` (here, the aspect and crop indices), `@FocusedBinding` in the App, and `Picker … .pickerStyle(.inline)`. Failing that, use Buttons with a "✓ " title prefix.
 
 Commit: `Add VLC's Video and Audio menus`
 
@@ -2949,7 +2949,7 @@ Then delete the reload workarounds:
 - C1: hit-testing through the SwiftUI overlay;
 - C2: menu staleness;
 - C4: the `.zero` versus increments crash, as an A/B check;
-- C5: right-click key order;
+- C5: right-click key order (IINA documents AppKit's special `rightMouseDown` handling; the plan does not depend on the order);
 - the ProMotion CVDisplayLink jitter (A1);
 - whether `CVDisplayLinkStop` waits for a running callback (A2).
 

@@ -165,3 +165,27 @@ These results become plan rules:
   - A no-op aspect change does not resize.
 - **D5 (corrected). Esc leaves fullscreen only. Windowed, it is swallowed** (VLCVoutView.m 171-176, 187).
   - VLC's own key mapping deliberately does not support Esc (VLCStringUtility.m 346), so the core `key-leave-fullscreen` hotkey is not reachable from the Cocoa key path.
+
+## Round three: web and GitHub search for C1, C2, C5
+
+New primary evidence from web searches and from shallow clones of IINA (`629ee348`), mpv, Chromium and WebKit. Verdicts stay UNSETTLED for the exact questions, but the plan now rests on stronger ground.
+
+- **C1. Apple DTS (forum 812113, Jan 2026, macOS 26.2, FB21579636) says overlapping hosting views are "expected behavior".**
+  - The recommended fix is to "override `hitTest` and route events as desired", for example by returning `nil` from the top `NSHostingView`'s `hitTest` so clicks always pass through to the view below.
+  - Apple staff first called the report a possible regression, then confirmed it as expected.
+  - A reply in the same thread says a hit test can reach a SwiftUI button while its `DragGesture` still gets no events. So keep gestures on the card itself.
+  - The plan's fallback (an `NSHostingView` subclass whose `hitTest` returns `nil` outside the card) is now Apple-endorsed, not just WWDC26-289 guidance.
+  - Still unsourced: what SwiftUI does for the empty area of a `GeometryReader`. Community answers only say hit testing uses the layout frame, and `contentShape` changes the hit area.
+- **C2. A published, dated working pattern exists (TrozWare, 2025).**
+  - It publishes state with `focusedSceneValue` as an optional `Binding`, reads it with `@FocusedBinding` in the App's `CommandMenu`, and uses a `Picker` with `.pickerStyle(.inline)`.
+  - The author reports it works "even in tabbed windows".
+  - The author reports Picker rows "only got updated as the menu opened". That is acceptable, because the menu is closed while the state changes.
+  - He abandoned `focusedSceneObject` only because he moved to Observation, not because it failed.
+  - The plan keeps View-typed content with Toggle rows and adds this Binding pattern as the fallback if the two-window check shows stale rows.
+- **C5. IINA's source documents an AppKit quirk (iina `MainWindowController.swift` L1187-1194, `VideoView.swift` L112-118).**
+  - AppKit has "special handling for rightMouseDown having to do with contextual menus".
+  - The event reaches the view, not the window controller, even though the docs say it goes up the responder chain.
+  - IINA acts on `rightMouseUp`.
+  - Chromium's `BridgedContentView.acceptsFirstMouse` returns `YES` for all events. WebKit's `acceptsFirstMouse` is conditional (drag or scroll while inactive).
+  - Nothing states the order of "make key" versus `menu(for:)`.
+  - The plan does not depend on the answer: the menu is built from the view's own window and controller, and `rightMouseDown` calls `window.makeKey()`.
