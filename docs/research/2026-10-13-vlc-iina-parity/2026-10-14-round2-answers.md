@@ -13,8 +13,10 @@ These answer the questions in `2026-10-13-gemini4-argon-round2-prompt.md`; Gemin
 | B2 | holds | verified, plus one addition |
 | B3 | holds after correction | verified with the corrections below |
 | C3 | holds | verified empirically on Swift 6.2.4, 6.3.3 and 6.4.1 |
-| C1, C2, C4, C5 | — | pending (Sonnet rerun) |
-| D1–D5 | — | pending (Sonnet rerun) |
+| C1, C2, C5 | verdict UNSETTLED held; verifier corrected details | no primary source; manual Mac checks in the plan |
+| C4 | holds | UNSETTLED in practice; docs say programmatic sizes ignore the lock |
+| D1, D3 | holds | verified |
+| D2, D4, D5 | holds after correction | verified with the corrections below |
 
 Pins: mpv `3186d369f9f090cd1363be0ac46a037824b702c6`, libplacebo `92b5ac6`, MoltenVK `v1.4.2`, MPVKit fork `profanitys1/MPVKit` `amp-master-vsync` (patches 0001–0004).
 
@@ -132,3 +134,34 @@ These results become plan rules:
 - Never pass a pre-built closure variable to a framework callback.
 
 **Still unsettled:** whether the macOS 26 MediaPlayer and Combine overlays are built in Swift 6 mode. If they are, there is no check, but the @Sendable pattern is safe either way.
+
+## C. AppKit / SwiftUI (C1, C2, C4, C5)
+
+- **C1 (UNSETTLED).** No primary source says whether the empty area of a full-size SwiftUI `GeometryReader` lets clicks through to an `NSViewRepresentable` underneath. The plan therefore adds a manual check and two fallbacks: `allowsHitTesting`, and measuring with `onGeometryChange(for:of:action:)` (macOS 13+). macOS 26 release note 108560020 reports gestures lost when `onHover` is used inside an overlay. Keep hover and gesture on the card itself.
+- **C2 (UNSETTLED).** No documented bug matches stale Picker rows in a CommandMenu. Related facts:
+  - Apple's workaround is to read focused values inside a View used as the menu content (forum 651748, Apple staff, 2020).
+  - Picker-in-Menu has an Apple-acknowledged bug, FB15061288 (forum 763217, DTS, 2024).
+  - `focusedSceneValue(_:)` for `@Observable` objects exists on macOS 14+ (verifier correction).
+
+  The plan uses View content with Toggle rows, plus a two-window manual check.
+- **C4.** Apple's docs say `contentAspectRatio`, `aspectRatio` and the resize increments are ignored for programmatic sizes. Setting one of them cancels the other. No source supports AMP's comment that AppKit reshapes `setFrame` to the locked ratio. Four apps report that assigning `.zero` leaves a degenerate ratio that traps, so the plan unlocks with `contentResizeIncrements = 1×1` and adds an A/B check on the Mac.
+- **C5 (UNSETTLED).** Nothing says whether a right-click makes a non-key window key before `menu(for:)`. The plan builds the menu from the view's own window and controller, and calls `window.makeKey()` in `rightMouseDown`.
+
+## D. VLC 3.0.x macOS (clone at f1369aeb)
+
+- **D1. Float on Top uses `NSStatusWindowLevel`** (VLCVoutWindowController.m 96-113).
+  - VLC drops it to normal for fullscreen and miniaturize, and restores it afterwards (Windows.m 434-444, 534-545, 633-641, 735-741).
+  - Helper panels sit at status level + 1, except the main window, which takes the same level.
+- **D2 (corrected). Fit to Screen (⌘3) calls `[[NSApp keyWindow] performZoom:]`** (VLCMainMenu.m 948-951).
+  - In the default configuration, with a titled window, this is AppKit's standard zoom. VLC does not override `windowWillUseStandardFrame:`, so the frame "nearly fills the current screen".
+  - Only borderless windows use VLC's `customZoom:`. That zooms to `visibleFrame` without keeping the aspect, and toggles back to the saved frame within 3 px.
+  - AMP maps ⌘3 to its fill toggle.
+- **D3. Resume.** Thresholds and the 30-item cap are verified (VLCInputManager.m 691-764).
+  - Playback is NOT paused while the dialog shows. The dialog is non-modal (`makeKeyAndOrderFront`).
+  - Continue seeks. A 10 s countdown ends with Restart, which does not seek.
+  - Return activates Continue. Changing the item cancels the offer.
+- **D4 (corrected). Changing aspect or crop resizes the window.** The path is the core's fit_window → `vout_window_SetSize` → `setNativeVideoSize:`. With `macosx-video-autoresize` (default on), that animates the window to the new native size at zoom 1, anchored top-left and clamped to `visibleFrame`.
+  - It is skipped in fullscreen.
+  - A no-op aspect change does not resize.
+- **D5 (corrected). Esc leaves fullscreen only. Windowed, it is swallowed** (VLCVoutView.m 171-176, 187).
+  - VLC's own key mapping deliberately does not support Esc (VLCStringUtility.m 346), so the core `key-leave-fullscreen` hotkey is not reachable from the Cocoa key path.
