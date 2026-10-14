@@ -1,0 +1,319 @@
+diff --git a/video/out/vulkan/context_moltenvk.m b/video/out/vulkan/context_moltenvk.m
+index 13a4bbb..80d6eec 100644
+--- a/video/out/vulkan/context_moltenvk.m
++++ b/video/out/vulkan/context_moltenvk.m
+@@ -15,6 +15,8 @@
+  * License along with mpv.  If not, see <http://www.gnu.org/licenses/>.
+  */
+ 
++#include <math.h>
++#include <stdbool.h>
+ #include <stdlib.h>
+ #include <string.h>
+ 
+@@ -41,19 +43,51 @@
+ // than half a second at 120 Hz; older entries are dropped and counted as skipped.
+ #define VSYNC_SLOTS 64
+ 
++// Upstream mac/common.swift updateDisplaylink() flags VO_EVENT_WIN_STATE again
++// 0.1 s after rebinding, once the display link has measured the new display.
++#define FPS_RECHECK_DELAY_NS MP_TIME_MS_TO_NS(100)
++// Bound on how often a refresh change seen by the display link re-queries fps.
++#define FPS_FLAG_INTERVAL_NS MP_TIME_MS_TO_NS(1000)
++
++// Threads:
++//  - VO thread: init, uninit, reconfig, control, get_vsync.
++//  - display link thread: display_link_cb.
++//  - main thread: never enters this file. The embedder resizes the layer there.
++// Locks: p->lock guards every field marked (L). The display link thread calls
++// vo_wakeup() with p->lock held, so the order is p->lock -> vo->in->lock. No VO
++// thread path holds vo->in->lock while calling into this file (vo.c releases it
++// around control(), draw_frame(), flip_page() and get_vsync()), and this context
++// has no .wakeup callback, which vo.c would call with vo->in->lock held.
+ struct priv {
+     struct mpvk_ctx vk;
+-    CAMetalLayer *layer;
++    CAMetalLayer *layer;            // set in init; read on the VO and link threads
+ 
+-    CVDisplayLinkRef link;
+-    CGDirectDisplayID display;
++    CVDisplayLinkRef link;          // VO thread only
++    CGDirectDisplayID display;      // VO thread only
+     mp_mutex lock;
+-    int64_t times[VSYNC_SLOTS];     // mp_time_ns() of each upcoming vsync, ascending
+-    int64_t durations[VSYNC_SLOTS]; // refresh period at that vsync, in ns
+-    int count;
+-    int overflowed;                 // entries dropped because the buffer was full
++    int64_t times[VSYNC_SLOTS];     // (L) mp_time_ns() of each upcoming vsync, ascending
++    int64_t durations[VSYNC_SLOTS]; // (L) refresh period at that vsync, in ns
++    int count;                      // (L)
++    int overflowed;                 // (L) entries dropped because the buffer was full
++
++    struct vo *wake_vo;             // (L) VO to wake from the link thread; NULL once uninit starts
++    bool wake_pending;              // (L) vo_wakeup() sent, VOCTRL_CHECK_EVENTS not run since
++    int pending_events;             // (L) VO_EVENT_* raised off the VO thread
++    bool configured;                // (L) the first reconfig() sized the swapchain
++    int applied_w, applied_h;       // (L) last drawableSize passed to ra_vk_ctx_resize()
++    double nominal_fps;             // (L) nominal rate behind the last VOCTRL_GET_DISPLAY_FPS, or 0
++    int64_t fps_recheck_at;         // (L) mp_time_ns() for a delayed re-query, or 0
++    int64_t fps_flag_after;         // (L) earliest mp_time_ns() for the next rate-change flag
+ };
+ 
++// CGFloat -> pixels with the half-to-even rounding MoltenVK applies to surface
++// extents (mvkVkExtent2DFromCGSize / mvkRoundHalfToEven), so a size compares
++// equal to the extent MoltenVK derives from it.
++static int to_px(CGFloat v)
++{
++    return (int)(v - remainder(v, 1.0));
++}
++
+ static CVReturn display_link_cb(CVDisplayLinkRef link, const CVTimeStamp *now,
+                                 const CVTimeStamp *output, CVOptionFlags flags_in,
+                                 CVOptionFlags *flags_out, void *ctx)
+@@ -61,11 +95,20 @@ static CVReturn display_link_cb(CVDisplayLinkRef link, const CVTimeStamp *now,
+     struct priv *p = ctx;
+     int64_t time = mp_time_ns_from_raw_time(mp_raw_time_ns_from_mach(output->hostTime));
+     int64_t duration = 0;
++    double link_fps = 0;
+     if (output->videoTimeScale > 0) {
+         duration = (int64_t)((double)output->videoRefreshPeriod / output->videoTimeScale
+                              * 1e9 * output->rateScalar);
++        if (output->videoRefreshPeriod > 0)
++            link_fps = (double)output->videoTimeScale / output->videoRefreshPeriod;
+     }
+ 
++    // Read without p->lock. Core Animation guards its own state; the value may
++    // be one update stale, which only delays the wakeup to the next vsync.
++    CGSize size = p->layer.drawableSize;
++    int w = to_px(size.width), h = to_px(size.height);
++    int64_t now_ns = mp_time_ns();
++
+     mp_mutex_lock(&p->lock);
+     if (p->count == VSYNC_SLOTS) {
+         memmove(p->times, p->times + 1, (VSYNC_SLOTS - 1) * sizeof(p->times[0]));
+@@ -76,6 +119,34 @@ static CVReturn display_link_cb(CVDisplayLinkRef link, const CVTimeStamp *now,
+     p->times[p->count] = time;
+     p->durations[p->count] = duration;
+     p->count++;
++
++    bool wake = false;
++
++    // (b) Re-query the rate once the link has measured a newly bound display.
++    if (p->fps_recheck_at && now_ns >= p->fps_recheck_at) {
++        p->fps_recheck_at = 0;
++        p->pending_events |= VO_EVENT_WIN_STATE;
++        wake = true;
++    }
++
++    // (b) The bound display changed mode (refresh rate) without a rebind.
++    if (link_fps > 0 && p->nominal_fps > 0 && now_ns >= p->fps_flag_after &&
++        fabs(link_fps - p->nominal_fps) > 0.1)
++    {
++        p->fps_flag_after = now_ns + FPS_FLAG_INTERVAL_NS;
++        p->pending_events |= VO_EVENT_WIN_STATE;
++        wake = true;
++    }
++
++    // (c) The embedder resized the layer, possibly while playback is paused
++    // and the VO thread sleeps (vo.c waits up to 1000 s when idle).
++    if (p->configured && w > 1 && h > 1 && (w != p->applied_w || h != p->applied_h))
++        wake = true;
++
++    if (wake && p->wake_vo && !p->wake_pending) {
++        p->wake_pending = true;
++        vo_wakeup(p->wake_vo);
++    }
+     mp_mutex_unlock(&p->lock);
+     return kCVReturnSuccess;
+ }
+@@ -94,23 +165,57 @@ static CGDirectDisplayID requested_display(struct ra_ctx *ctx)
+     return CGMainDisplayID();
+ }
+ 
+-static void bind_display(struct ra_ctx *ctx)
++// VO thread. Returns true when the link moved to another display.
++static bool bind_display(struct ra_ctx *ctx)
+ {
+     struct priv *p = ctx->priv;
+     CGDirectDisplayID display = requested_display(ctx);
+     if (!p->link || p->display == display)
+-        return;
++        return false;
+     if (CVDisplayLinkSetCurrentCGDisplay(p->link, display) != kCVReturnSuccess) {
+         MP_WARN(ctx, "Could not bind display link to display %u\n", display);
+-        return;
++        return false;
+     }
+     p->display = display;
+     // Times queued for the previous display no longer describe this one.
+     mp_mutex_lock(&p->lock);
+     p->count = 0;
+     p->overflowed = 0;
++    p->fps_recheck_at = mp_time_ns() + FPS_RECHECK_DELAY_NS;
+     mp_mutex_unlock(&p->lock);
+     MP_VERBOSE(ctx, "Display link bound to display %u\n", display);
++    return true;
++}
++
++// Port of mac/common.swift currentFps() (and of cocoa_common.m
++// vo_cocoa_update_screen_fps() before it): the measured period when it is
++// within 0.1 Hz of the nominal one, else the nominal one, else 60 Hz.
++// The timeValue > 0 check is an addition; upstream divides unguarded.
++// *out_nominal receives the nominal rate, or 0 when it is unknown.
++static double current_fps(struct ra_ctx *ctx, double *out_nominal)
++{
++    struct priv *p = ctx->priv;
++    *out_nominal = 0;
++    double actual_fps = CVDisplayLinkGetActualOutputVideoRefreshPeriod(p->link);
++    CVTime nominal = CVDisplayLinkGetNominalOutputVideoRefreshPeriod(p->link);
++
++    if (!(nominal.flags & kCVTimeIsIndefinite) && nominal.timeValue > 0) {
++        double nominal_fps = nominal.timeScale / (double)nominal.timeValue;
++        *out_nominal = nominal_fps;
++
++        if (actual_fps > 0)
++            actual_fps = 1 / actual_fps;
++
++        if (fabs(actual_fps - nominal_fps) > 0.1) {
++            MP_VERBOSE(ctx, "Falling back to nominal display refresh rate: %f\n",
++                       nominal_fps);
++            return nominal_fps;
++        }
++        return actual_fps;
++    }
++
++    MP_WARN(ctx, "Falling back to standard display refresh rate: 60Hz\n");
++    return 60.0;
+ }
+ 
+ static void moltenvk_get_vsync(struct ra_ctx *ctx, struct vo_vsync_info *info)
+@@ -153,6 +258,11 @@ static void stop_display_link(struct priv *p)
+ static void moltenvk_uninit(struct ra_ctx *ctx)
+ {
+     struct priv *p = ctx->priv;
++    // From here on the display link thread must not touch ctx->vo. A callback
++    // already inside vo_wakeup() holds p->lock, so this waits for it.
++    mp_mutex_lock(&p->lock);
++    p->wake_vo = NULL;
++    mp_mutex_unlock(&p->lock);
+     stop_display_link(p);
+     ra_vk_ctx_uninit(ctx);
+     mpvk_uninit(&p->vk);
+@@ -168,6 +278,8 @@ static void start_display_link(struct ra_ctx *ctx)
+         return;
+     }
+     CVDisplayLinkSetOutputCallback(p->link, display_link_cb, p);
++    // No event pointer here: vo.c raises VO_EVENT_WIN_STATE itself right after
++    // preinit, and bind_display() schedules the delayed re-query.
+     bind_display(ctx);
+     if (CVDisplayLinkStart(p->link) != kCVReturnSuccess) {
+         MP_WARN(ctx, "Could not start display link\n");
+@@ -211,6 +323,9 @@ static bool moltenvk_init(struct ra_ctx *ctx)
+     if (!ra_vk_ctx_init(ctx, vk, params, VK_PRESENT_MODE_FIFO_KHR))
+         goto fail;
+ 
++    mp_mutex_lock(&p->lock);
++    p->wake_vo = ctx->vo;
++    mp_mutex_unlock(&p->lock);
+     start_display_link(ctx);
+     return true;
+ fail:
+@@ -218,20 +333,93 @@ fail:
+     return false;
+ }
+ 
++// VO thread only: ra_vk_ctx_resize() writes vo->dwidth/dheight, which vo.h
++// reserves for the VO thread.
++static void apply_size(struct ra_ctx *ctx, int w, int h)
++{
++    struct priv *p = ctx->priv;
++    if (!ra_vk_ctx_resize(ctx, w, h))
++        MP_WARN(ctx, "Could not resize the swapchain to %dx%d\n", w, h);
++    MP_VERBOSE(ctx, "Layer %dx%d, swapchain %dx%d\n", w, h,
++               ctx->vo->dwidth, ctx->vo->dheight);
++
++    // Record the request, not the result, so a size the swapchain cannot take
++    // does not make the display link wake the VO on every vsync.
++    mp_mutex_lock(&p->lock);
++    p->applied_w = w;
++    p->applied_h = h;
++    p->configured = true;
++    mp_mutex_unlock(&p->lock);
++}
++
+ static bool moltenvk_reconfig(struct ra_ctx *ctx)
+ {
+     struct priv *p = ctx->priv;
+     CGSize s = p->layer.drawableSize;
+-    ra_vk_ctx_resize(ctx, s.width, s.height);
++    int w = to_px(s.width), h = to_px(s.height);
++    if (w <= 1 || h <= 1) {
++        // MoltenVK parks drawableSize at 1x1 between swapchains
++        // (MVKSwapchain::forceUnpresentedImageCompletion). Use the extent
++        // MoltenVK reports as currentExtent instead: bounds * contentsScale.
++        CGSize b = p->layer.bounds.size;
++        CGFloat scale = p->layer.contentsScale;
++        w = to_px(b.width * scale);
++        h = to_px(b.height * scale);
++    }
++    apply_size(ctx, w, h);
+     return true;
+ }
+ 
+ static int moltenvk_control(struct ra_ctx *ctx, int *events, int request, void *arg)
+ {
+-    // vo.c sends this on the VO thread whenever a vo option such as
+-    // --screen-name changes, so the display link follows the window.
+-    if (request == VOCTRL_VO_OPTS_CHANGED)
+-        bind_display(ctx);
++    struct priv *p = ctx->priv;
++
++    switch (request) {
++    case VOCTRL_CHECK_EVENTS: {
++        // vo.c sends this once per VO loop iteration, on the VO thread.
++        mp_mutex_lock(&p->lock);
++        *events |= p->pending_events;
++        p->pending_events = 0;
++        p->wake_pending = false;
++        bool configured = p->configured;
++        int applied_w = p->applied_w, applied_h = p->applied_h;
++        mp_mutex_unlock(&p->lock);
++
++        if (configured) {
++            CGSize s = p->layer.drawableSize;
++            int w = to_px(s.width), h = to_px(s.height);
++            // > 1, not > 0: 1x1 is MoltenVK's placeholder, not a layout size.
++            if (w > 1 && h > 1 && (w != applied_w || h != applied_h)) {
++                apply_size(ctx, w, h);
++                // vo_gpu_next control(): RESIZE -> resize(vo) recomputes the
++                // src/dst rects from vo->dwidth/dheight and sets want_redraw.
++                // Same pair as upstream mac_common.swift windowDidResize().
++                *events |= VO_EVENT_RESIZE | VO_EVENT_EXPOSE;
++            }
++        }
++        return VO_TRUE;
++    }
++    case VOCTRL_VO_OPTS_CHANGED:
++        // Sent on the VO thread whenever a vo option such as --screen-name
++        // changes, so the display link follows the window. WIN_STATE makes
++        // vo.c update_display_fps() ask VOCTRL_GET_DISPLAY_FPS again.
++        if (bind_display(ctx))
++            *events |= VO_EVENT_WIN_STATE;
++        return VO_TRUE;
++    case VOCTRL_GET_DISPLAY_FPS: {
++        // Without a display link there is nothing bound to measure; leave
++        // display_fps at 0 (vo.c initialises fps to 0 and ignores the return).
++        if (!p->link)
++            return VO_NOTIMPL;
++        double nominal_fps;
++        *(double *)arg = current_fps(ctx, &nominal_fps);
++        mp_mutex_lock(&p->lock);
++        p->nominal_fps = nominal_fps;
++        p->fps_flag_after = mp_time_ns() + FPS_FLAG_INTERVAL_NS;
++        mp_mutex_unlock(&p->lock);
++        return VO_TRUE;
++    }
++    }
+     return VO_NOTIMPL;
+ }
+ 
